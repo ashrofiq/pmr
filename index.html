@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.1.2</title>
+<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.2.0</title>
 <meta name="application-name" content="UKS SMANSAQ">
-<meta name="app-version" content="3.1.2">
+<meta name="app-version" content="3.2.0">
 <meta name="description" content="Sistem Informasi UKS SMA Negeri 1 Klirong — rekam medis, screening, kunjungan, permintaan & stok obat.">
 <meta name="theme-color" content="#1e3a5f">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -40,10 +40,11 @@ body{font-family:'Inter',sans-serif}
 
 <script>
 /* ============================================================
-   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.1.2
+   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.2.0
    Single-file Application
    ============================================================ */
 
+// v3.2.0: siswa sering registrasi pasien masuk Siswa Rawan; dashboard staf: hapus kunjungan/screening terbaru, tambah tombol Registrasi Pasien & Permintaan Obat (popup).
 // v3.1.2: petugas dapat mengakses Stok Obat (hapus obat tetap khusus admin).
 // v3.1.1: submenu Screening tidak di sidebar; diakses lewat tombol di halaman Screening.
 // v3.1.0: siswa belum screening tidak masuk Siswa Rawan; submenu Screening (Form, Daftar, Belum Screening);
@@ -51,7 +52,7 @@ body{font-family:'Inter',sans-serif}
 // ==================== APP META ====================
 const APP_NAME    = 'UKS SMANSAQ';
 const APP_SUBNAME = 'SMA Negeri 1 Klirong';
-const APP_VERSION = '3.1.2';
+const APP_VERSION = '3.2.0';
 
 // ==================== LOGO (SVG inline, menyerupai logo UKS SMANSAQ) ====================
 const LOGO_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Logo UKS SMANSAQ">'
@@ -466,7 +467,10 @@ function printReport({title,subtitle,meta,headers,rows,footer}){
 }
 
 // ==================== ANALISIS SISWA RAWAN ====================
+// Aturan "sering registrasi pasien": minimal JUMLAH kunjungan dalam HARI terakhir
+const SERING_KUNJUNGAN = { jumlah:3, hari:30 };
 const RISK_CATEGORIES = {
+  sering_kunjungan:{label:'Sering Kunjungan UKS',color:'indigo',icon:'fa-clipboard-user',desc:'Sering registrasi sebagai pasien'},
   alergi:{label:'Alergi',color:'rose',icon:'fa-triangle-exclamation',desc:'Siswa dengan alergi'},
   riwayat:{label:'Riwayat Penyakit',color:'amber',icon:'fa-notes-medical',desc:'Ada riwayat penyakit'},
   gizi_kurang:{label:'Gizi Kurang',color:'orange',icon:'fa-arrow-down',desc:'IMT < 18.5'},
@@ -486,7 +490,15 @@ function analisaSiswaRawan(){
     if(s.riwayat_penyakit&&s.riwayat_penyakit.trim()){risks.push('riwayat');details.riwayat=s.riwayat_penyakit.trim();}
     const scr=DB.db.screening.filter(x=>x.siswa_id===s.id).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
     const last=scr[0];
-    if(!last)return null;   // v3.1.2: siswa yang belum screening tidak dimasukkan ke siswa rawan
+    const kjCut=Date.now()-SERING_KUNJUNGAN.hari*864e5;
+    const nKj=DB.db.kunjungan.filter(k=>k.siswa_id===s.id&&new Date(k.tanggal).getTime()>=kjCut).length;
+    const sering=nKj>=SERING_KUNJUNGAN.jumlah;
+    if(!last){
+      // Belum screening tidak dimasukkan ke siswa rawan, kecuali sering registrasi sebagai pasien
+      if(!sering)return null;
+      risks.length=0;Object.keys(details).forEach(k=>delete details[k]);
+    }
+    if(sering){risks.push('sering_kunjungan');details.sering_kunjungan=`${nKj}x kunjungan dalam ${SERING_KUNJUNGAN.hari} hari`;}
     if(last){
       if(last.imt){try{const imt=JSON.parse(last.imt);
         if(imt.status==='Kurus'){risks.push('gizi_kurang');details.gizi_kurang=`IMT ${imt.imt}`;}
@@ -504,14 +516,14 @@ function analisaSiswaRawan(){
         else if(gd<70){risks.push('gula_darah');details.gula_darah=`${gd} mg/dL (Rendah)`;}
       }
     }
-    const sev=risks.reduce((n,r)=>n+({hipertensi:3,gizi_lebih:3,demam:2,gizi_kurang:2,hipotensi:2,gula_darah:3,alergi:1,riwayat:1}[r]||1),0);
+    const sev=risks.reduce((n,r)=>n+({hipertensi:3,gizi_lebih:3,demam:2,gizi_kurang:2,hipotensi:2,gula_darah:3,alergi:1,riwayat:1,sering_kunjungan:3}[r]||1),0);
     let level='rendah',levelColor='emerald';
     if(sev>=6){level='tinggi';levelColor='rose';}else if(sev>=3){level='sedang';levelColor='amber';}
     return {siswa:s,risks,details,severity:sev,level,levelColor,lastScr:last};
   }).filter(x=>x&&x.risks.length>0);
 }
 
-// ==================== v3.1.2: HELPER SCREENING ====================
+// ==================== v3.2.0: HELPER SCREENING ====================
 function getSiswaAktif(){const ta=DB.db.tahunAjaranAktif;return DB.db.siswa.filter(s=>!s.tahun_ajaran||s.tahun_ajaran===ta);}
 function getBelumScreening(){const done=new Set(DB.db.screening.map(x=>x.siswa_id));return getSiswaAktif().filter(s=>!done.has(s.id));}
 function parseImtSafe(s){try{return s&&s.imt?JSON.parse(s.imt):null;}catch{return null;}}
@@ -528,7 +540,7 @@ function screeningTabs(active){
   return `<div class="flex flex-wrap gap-2 mb-6 slide-up">${t.map(([id,l,ic])=>`<button onclick="View.go('${id}')" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${active===id?'bg-blue-600 text-white shadow-md shadow-blue-600/30':'bg-white border border-gray-200 text-gray-700 hover:bg-blue-50 hover:text-blue-700'}"><i class="fa-solid ${ic}"></i>${l}${id==='screening-belum'&&belum?`<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${active===id?'bg-white text-blue-700':'bg-amber-500 text-white'}">${belum}</span>`:''}</button>`).join('')}</div>`;
 }
 
-// ==================== v3.1.2: DAFTAR SCREENING ====================
+// ==================== v3.2.0: DAFTAR SCREENING ====================
 function renderScreeningDaftar(page){
   const aktifIds=new Set(getSiswaAktif().map(s=>s.id));
   const all=DB.db.screening.filter(x=>aktifIds.has(x.siswa_id)).map(x=>({...x,_s:DB.find('siswa',x.siswa_id),_imt:parseImtSafe(x)})).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
@@ -594,7 +606,7 @@ function renderScreeningDaftar(page){
   draw();
 }
 
-// ==================== v3.1.2: SISWA BELUM SCREENING ====================
+// ==================== v3.2.0: SISWA BELUM SCREENING ====================
 function renderScreeningBelum(page){
   const aktif=getSiswaAktif();
   const belum=getBelumScreening().sort((a,b)=>String(a.kelas||'').localeCompare(String(b.kelas||''),'id')||String(a.nama).localeCompare(String(b.nama),'id'));
@@ -602,7 +614,7 @@ function renderScreeningBelum(page){
   let cur=belum;
   page.innerHTML=`
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 slide-up">
-      <div><h2 class="text-3xl font-bold text-gray-800">Siswa Belum Screening</h2><p class="text-gray-500 mt-1">Siswa yang belum memiliki data screening (TA ${esc(DB.db.tahunAjaranAktif)}). Siswa ini belum dihitung sebagai siswa rawan.</p></div>
+      <div><h2 class="text-3xl font-bold text-gray-800">Siswa Belum Screening</h2><p class="text-gray-500 mt-1">Siswa yang belum memiliki data screening (TA ${esc(DB.db.tahunAjaranAktif)}). Siswa ini belum dihitung sebagai siswa rawan (kecuali sering registrasi sebagai pasien).</p></div>
       <div class="flex gap-2">
         <button onclick="exportBelumScreening()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-lg shadow-amber-600/30"><i class="fa-solid fa-file-excel"></i> Export</button>
         <button onclick="cetakBelumScreening()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-lg shadow-emerald-600/30"><i class="fa-solid fa-print"></i> Cetak</button>
@@ -649,7 +661,7 @@ function renderScreeningBelum(page){
   draw();
 }
 
-// ==================== v3.1.2: AREA SISWA (Dashboard & Riwayat Kesehatan) ====================
+// ==================== v3.2.0: AREA SISWA (Dashboard & Riwayat Kesehatan) ====================
 const RIWAYAT_META={
   screening:{label:'Screening',color:'emerald',icon:'fa-stethoscope'},
   kunjungan:{label:'Kunjungan UKS',color:'indigo',icon:'fa-clipboard-user'},
@@ -985,10 +997,12 @@ function renderDashboard(page){
   const permintaanPending=DB.db.permintaanObat.filter(p=>p.status==='menunggu');
   const stokRendah=DB.db.obat.filter(o=>o.stok<=o.stok_min);
   const stats={totalSiswa:siswaAktif.length,kunjunganHariIni:kunjunganHariIni.length,kunjunganAktif:kunjunganAktif.length,screeningBulanIni:DB.db.screening.filter(s=>bulanIni(s.tanggal)).length,siswaRawan:rawan.length,permintaanPending:permintaanPending.length,stokRendah:stokRendah.length};
-  const recentKunjungan=[...DB.db.kunjungan].sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal)).slice(0,5);
-  const recentScreening=[...DB.db.screening].sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal)).slice(0,5);
   page.innerHTML = `
     <div class="mb-6 slide-up"><h2 class="text-3xl font-bold text-gray-800">Dashboard</h2><p class="text-gray-500 mt-1">Selamat datang, <span class="font-semibold text-blue-600">${esc(user.full_name)}</span> 👋 <span class="text-xs bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-full ml-2">TA ${esc(taAktif)}</span> <span class="text-xs bg-emerald-100 text-emerald-700 font-semibold px-2 py-0.5 rounded-full ml-1">v${APP_VERSION}</span></p></div>
+    <div class="grid sm:grid-cols-2 gap-4 mb-6 slide-up">
+      <button onclick="openKunjunganForm()" class="flex items-center gap-4 text-left bg-white hover:bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 transition-all shadow-sm hover:shadow-md"><div class="w-14 h-14 rounded-xl bg-blue-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-600/30"><i class="fa-solid fa-clipboard-user text-white text-2xl"></i></div><div class="flex-1"><p class="font-bold text-gray-800 text-lg">Registrasi Pasien</p><p class="text-xs text-gray-500">Catat siswa sakit yang datang ke UKS</p></div><i class="fa-solid fa-plus text-blue-500"></i></button>
+      <button onclick="openPermintaanForm()" class="flex items-center gap-4 text-left bg-white hover:bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-5 transition-all shadow-sm hover:shadow-md"><div class="w-14 h-14 rounded-xl bg-emerald-600 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-600/30"><i class="fa-solid fa-pills text-white text-2xl"></i></div><div class="flex-1"><p class="font-bold text-gray-800 text-lg">Permintaan Obat</p><p class="text-xs text-gray-500">Ajukan permintaan obat dari stok UKS</p></div><i class="fa-solid fa-plus text-emerald-500"></i></button>
+    </div>
     ${stats.kunjunganAktif?`<button onclick="View.go('kunjungan')" class="w-full text-left bg-gradient-to-r from-blue-500 to-blue-700 rounded-2xl p-6 text-white shadow-lg shadow-blue-600/30 mb-4 slide-up"><div class="flex items-center gap-4"><div class="w-14 h-14 rounded-full bg-white/20 backdrop-blur flex items-center justify-center pulse-ring-blue"><i class="fa-solid fa-clipboard-user text-2xl"></i></div><div class="flex-1"><p class="font-bold text-lg">📋 ${stats.kunjunganAktif} Pasien Aktif di UKS</p><p class="text-blue-100 text-sm">${stats.kunjunganHariIni} kunjungan hari ini</p></div><i class="fa-solid fa-arrow-right text-xl"></i></div></button>`:''}
     ${stats.permintaanPending?`<button onclick="View.go('permintaan')" class="w-full text-left bg-gradient-to-r from-amber-500 to-amber-700 rounded-2xl p-4 text-white shadow-lg shadow-amber-600/30 mb-4 slide-up"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-full bg-white/20 backdrop-blur flex items-center justify-center"><i class="fa-solid fa-pills text-xl"></i></div><div class="flex-1"><p class="font-bold">💊 ${stats.permintaanPending} Permintaan Obat Menunggu</p><p class="text-amber-100 text-xs">${user.role==='admin'?'Klik untuk meninjau':'Menunggu persetujuan admin'}</p></div><i class="fa-solid fa-arrow-right"></i></div></button>`:''}
     ${stats.siswaRawan?`<button onclick="View.go('rawan')" class="w-full text-left bg-gradient-to-r from-rose-500 to-rose-700 rounded-2xl p-4 text-white shadow-lg shadow-rose-600/30 mb-6 slide-up"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-full bg-white/20 backdrop-blur flex items-center justify-center pulse-ring"><i class="fa-solid fa-user-injured text-xl"></i></div><div class="flex-1"><p class="font-bold">⚠ ${stats.siswaRawan} Siswa Rawan Terdeteksi</p><p class="text-rose-100 text-xs">${rawan.filter(r=>r.level==='tinggi').length} siswa risiko tinggi</p></div><i class="fa-solid fa-arrow-right"></i></div></button>`:'<div class="mb-6"></div>'}
@@ -998,16 +1012,6 @@ function renderDashboard(page){
       ${card('Kunjungan Hari Ini',stats.kunjunganHariIni,'fa-clipboard-user','indigo')}
       ${card('Screening Bulan Ini',stats.screeningBulanIni,'fa-stethoscope','emerald')}
       ${card('Permintaan Obat',stats.permintaanPending,'fa-pills','amber')}
-    </div>
-    <div class="grid lg:grid-cols-2 gap-6 mb-6">
-      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 slide-up">
-        <div class="flex items-center justify-between mb-4"><h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-clipboard-user text-blue-600"></i> Kunjungan Terbaru</h3><button onclick="View.go('kunjungan')" class="text-xs text-blue-600 font-semibold hover:underline">Lihat semua →</button></div>
-        <div class="space-y-2">${recentKunjungan.length?recentKunjungan.map(k=>{const sw=DB.find('siswa',k.siswa_id);const st=STATUS_KUNJUNGAN[k.status];return `<button onclick="View.go('siswa-detail',{id:${k.siswa_id}})" class="w-full text-left flex items-center justify-between p-3 rounded-xl hover:bg-gray-50"><div class="min-w-0 flex-1"><p class="font-semibold text-gray-800 text-sm truncate">${esc(sw?.nama||'Siswa dihapus')}</p><p class="text-xs text-gray-500 truncate">${esc(k.keluhan)}</p></div><span class="text-[10px] px-2 py-1 rounded-full bg-${st.color}-100 text-${st.color}-700 font-semibold whitespace-nowrap ml-2">${st.label}</span></button>`;}).join(''):'<p class="text-center py-6 text-gray-400 text-sm">Belum ada kunjungan</p>'}</div>
-      </div>
-      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 slide-up">
-        <div class="flex items-center justify-between mb-4"><h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-stethoscope text-emerald-600"></i> Screening Terbaru</h3><button onclick="View.go('screening')" class="text-xs text-blue-600 font-semibold hover:underline">Buat →</button></div>
-        <div class="space-y-2">${recentScreening.length?recentScreening.map(s=>{const sw=DB.find('siswa',s.siswa_id);const imt=s.imt?JSON.parse(s.imt):null;return `<button onclick="View.go('siswa-detail',{id:${s.siswa_id}})" class="w-full text-left flex items-center justify-between p-3 rounded-xl hover:bg-gray-50"><div class="min-w-0"><p class="font-semibold text-gray-800 text-sm truncate">${esc(sw?.nama||'-')}</p><p class="text-xs text-gray-500">${fmtDate(s.tanggal)}${imt?' · IMT: '+imt.imt:''}</p></div><i class="fa-solid fa-chevron-right text-gray-400 shrink-0"></i></button>`;}).join(''):'<p class="text-center py-6 text-gray-400 text-sm">Belum ada data screening</p>'}</div>
-      </div>
     </div>
     ${stokRendah.length?`<div class="bg-amber-50 border border-amber-200 rounded-2xl p-5 slide-up"><div class="flex items-start gap-3"><div class="w-11 h-11 rounded-full bg-amber-100 flex items-center justify-center shrink-0"><i class="fa-solid fa-triangle-exclamation text-amber-600 text-lg"></i></div><div class="flex-1"><p class="font-bold text-amber-800">⚠ ${stokRendah.length} Obat Stok Rendah</p><p class="text-xs text-amber-700 mt-1">${stokRendah.map(o=>`${o.nama} (${o.stok} ${o.satuan})`).join(' · ')}</p>${user.role!=='siswa'?`<button onclick="View.go('obat')" class="mt-2 text-xs font-semibold text-amber-700 hover:underline">Kelola stok obat →</button>`:''}</div></div></div>`:''}
   `;
@@ -1871,7 +1875,7 @@ function renderSiswaRawan(page){
   const kategoriCount={};Object.keys(RISK_CATEGORIES).forEach(k=>{kategoriCount[k]=all.filter(x=>x.risks.includes(k)).length;});
   page.innerHTML = `
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 slide-up">
-      <div><h2 class="text-3xl font-bold text-gray-800 flex items-center gap-3"><span class="w-11 h-11 rounded-xl bg-rose-100 flex items-center justify-center"><i class="fa-solid fa-user-injured text-rose-600 text-xl"></i></span>Siswa Rawan</h2><p class="text-gray-500 mt-1">Deteksi otomatis siswa berisiko berdasarkan hasil screening (TA ${esc(DB.db.tahunAjaranAktif)}). Siswa yang belum screening tidak termasuk.</p></div>
+      <div><h2 class="text-3xl font-bold text-gray-800 flex items-center gap-3"><span class="w-11 h-11 rounded-xl bg-rose-100 flex items-center justify-center"><i class="fa-solid fa-user-injured text-rose-600 text-xl"></i></span>Siswa Rawan</h2><p class="text-gray-500 mt-1">Deteksi otomatis siswa berisiko berdasarkan hasil screening (TA ${esc(DB.db.tahunAjaranAktif)}). Siswa yang belum screening tidak termasuk, kecuali siswa yang sering registrasi sebagai pasien (≥${SERING_KUNJUNGAN.jumlah} kunjungan dalam ${SERING_KUNJUNGAN.hari} hari).</p></div>
       <div class="flex gap-2"><button onclick="exportSiswaRawan()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-lg shadow-amber-600/30"><i class="fa-solid fa-file-excel"></i> Export</button><button onclick="cetakSiswaRawan()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-lg shadow-emerald-600/30"><i class="fa-solid fa-print"></i> Cetak</button></div>
     </div>
     ${stats.total?`<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -2686,7 +2690,7 @@ window.addEventListener('storage',e=>{
   if(Session.user()&&!document.getElementById('modalContainer').innerHTML.trim())View.render();
 });
 
-// ==================== SUPABASE CLOUD (v3.1.2) ====================
+// ==================== SUPABASE CLOUD (v3.2.0) ====================
 // Anon key aman ditaruh di sini (memang publik) SELAMA RLS aktif. JANGAN pernah taruh service_role key di file ini.
 const SUPABASE_URL='https://sixukvhwlsrjkcuchlmj.supabase.co';
 const SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpeHVrdmh3bHNyamtjdWNobG1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNDE1MzYsImV4cCI6MjEwODcxNzUzNn0.lFiYdshcLm8a7TPe_eSLQO81wY0goKlgXqH3eoIL9eY';
@@ -2849,7 +2853,7 @@ const Cloud={
   applySiswa(x){
     this.role='siswa';const ta=x.ta||x.siswa.tahun_ajaran||'-';
     const scr=(x.screening||[]).map(r=>this.fromRow('screening',r));
-    const fr=(k,a)=>(Array.isArray(a)?a:[]).map(r=>this.fromRow(k,r));   // v3.1.2: riwayat lengkap jika RPC siswa_login mengirimnya
+    const fr=(k,a)=>(Array.isArray(a)?a:[]).map(r=>this.fromRow(k,r));   // v3.2.0: riwayat lengkap jika RPC siswa_login mengirimnya
     DB.db=this.shape({siswa:[this.fromRow('siswa',x.siswa)],screening:scr,rekam:fr('rekam',x.rekam),kunjungan:fr('kunjungan',x.kunjungan),permintaanObat:fr('permintaanObat',x.permintaan_obat),obat:fr('obat',x.obat),tahunAjaran:[ta],tahunAjaranAktif:ta,kelas:[]});
     this.snap={screening:new Map(scr.map(r=>[r.id,'x']))};
   },
