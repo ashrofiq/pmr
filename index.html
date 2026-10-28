@@ -111,18 +111,19 @@ function u_isActive(u){
   return v===1 || v===true || v==='1' || v==='true';
 }
 
-// ==================== AKUN SISWA (username = nama depan, password = tgl lahir DDMMYYYY) ====================
+// ==================== AKUN SISWA (username = nama depan, password = tgl lahir YYYY-MM-DD) ====================
 function firstName(n){return String(n||'').trim().split(/\s+/)[0].toLowerCase();}
 function tglDigits(t){const m=String(t||'').match(/^(\d{4})-(\d{2})-(\d{2})/);return m?m[3]+m[2]+m[1]:'';}
+// Password siswa HANYA format YYYY-MM-DD (dikirim apa adanya; RPC siswa_login di server membandingkannya dengan kolom tanggal_lahir).
+function pwSiswaKirim(pw){const t=String(pw).trim();return /^\d{4}-\d{2}-\d{2}$/.test(t)?t:null;}
 function loginSiswa(username,password){
   const u=String(username).trim().toLowerCase();
-  const d=String(password).replace(/\D/g,'');
-  if(!u||d.length!==8)return {};
-  const alt=d.slice(6)+d.slice(4,6)+d.slice(0,4); // terima DDMMYYYY maupun YYYYMMDD
+  const pw=String(password).trim();
+  if(!u||!/^\d{4}-\d{2}-\d{2}$/.test(pw))return {};
   const ta=DB.db.tahunAjaranAktif;
   const cand=DB.db.siswa.filter(s=>(!s.tahun_ajaran||s.tahun_ajaran===ta)&&s.tanggal_lahir
     &&(firstName(s.nama)===u||String(s.nis).trim().toLowerCase()===u)
-    &&(tglDigits(s.tanggal_lahir)===d||tglDigits(s.tanggal_lahir)===alt));
+    &&String(s.tanggal_lahir).slice(0,10)===pw);
   if(cand.length===1)return {siswa:cand[0]};
   if(cand.length>1)return {pesan:'Ada siswa dengan nama depan & tanggal lahir yang sama. Gunakan NIS sebagai username.'};
   return {};
@@ -134,14 +135,6 @@ function syncKesehatanSiswa(id){
   const g=document.getElementById('sc_goldar');if(!g||!id)return;
   DB.update('siswa',id,{golongan_darah:g.value,alergi:document.getElementById('sc_alergi').value.trim(),riwayat_penyakit:document.getElementById('sc_riwayat').value.trim()});
 }
-window.exportAkunSiswa=()=>{
-  const ta=DB.db.tahunAjaranAktif;
-  const list=DB.db.siswa.filter(x=>!x.tahun_ajaran||x.tahun_ajaran===ta);
-  if(!list.length)return toast('Belum ada siswa','error');
-  const cnt={};list.forEach(x=>{const k=firstName(x.nama)+'|'+tglDigits(x.tanggal_lahir);cnt[k]=(cnt[k]||0)+1;});
-  exportExcel(list.map(x=>{const fn=firstName(x.nama),pw=tglDigits(x.tanggal_lahir),dup=pw&&cnt[fn+'|'+pw]>1;
-    return {'NIS':x.nis,'Nama':x.nama,'Kelas':x.kelas||'','Username':dup?x.nis:fn,'Password (DDMMYYYY)':pw||'-','Catatan':!pw?'Tanggal lahir belum diisi, tidak bisa login':dup?'Nama depan & tgl lahir kembar: login pakai NIS':''};}),'Akun Siswa',`Akun_Siswa_${todayISO()}.xlsx`);
-};
 
 // ==================== PASSWORD HASH (SHA-256 sinkron, tanpa dependensi) ====================
 function sha256(ascii){
@@ -558,7 +551,7 @@ function renderLogin(){
           <button type="submit" id="loginBtn" class="w-full bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-blue-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-60"><i class="fa-solid fa-right-to-bracket"></i><span id="loginBtnText">Masuk</span></button>
         </form>
         <div class="relative my-6"><div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-200"></div></div><div class="relative flex justify-center text-xs"><span class="bg-white/80 px-3 text-gray-400">${esc(APP_SUBNAME)}</span></div></div>
-        <p class="text-center text-[11px] text-gray-500 mb-2"><i class="fa-solid fa-graduation-cap"></i> <b>Siswa:</b> username = nama depan, password = tanggal lahir (DDMMYYYY)</p>
+        <p class="text-center text-[11px] text-gray-500 mb-2"><i class="fa-solid fa-graduation-cap"></i> <b>Siswa:</b> username = nama depan, password = tanggal lahir (YYYY-MM-DD, contoh 2008-05-15)</p>
         <p class="text-center text-xs text-gray-500">Belum punya akun? <span class="text-blue-600 font-semibold">Hubungi Administrator</span></p>
       </div>
       <p class="text-center text-xs text-gray-400 mt-6">© ${new Date().getFullYear()} ${esc(APP_NAME)} · v${APP_VERSION}</p>
@@ -744,7 +737,6 @@ function renderSiswa(page){
       <div><h2 class="text-3xl font-bold text-gray-800">Data Siswa</h2><p class="text-gray-500 mt-1">Kelola data siswa ${esc(APP_NAME)}</p></div>
       <div class="flex flex-wrap gap-2">
         ${isAdmin?`<button onclick="openImportModal()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-lg shadow-emerald-600/30 transition-all"><i class="fa-solid fa-file-import"></i> Import</button>`:''}
-        ${isAdmin?`<button onclick="exportAkunSiswa()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-600 hover:bg-slate-700 text-white font-semibold shadow-lg shadow-slate-600/30 transition-all"><i class="fa-solid fa-id-card"></i> Akun Siswa</button>`:''}
         <button onclick="exportSiswa()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-lg shadow-amber-600/30 transition-all"><i class="fa-solid fa-file-excel"></i> Export</button>
         ${isAdmin?`<button onclick="openSiswaForm()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-lg shadow-blue-600/30 transition-all"><i class="fa-solid fa-plus"></i> Tambah</button>`:''}
       </div>
@@ -2418,6 +2410,37 @@ const CLOUD_ON=!!(SUPABASE_URL&&SUPABASE_ANON);
 const Cloud={
   TABLES:{siswa:'siswa',rekam:'rekam',screening:'screening',kunjungan:'kunjungan',obat:'obat',permintaanObat:'permintaan_obat'},
   SET_KEYS:['kelas','tahunAjaran','tahunAjaranAktif','pembagianKelas'],
+  // Kolom tabel biasa (s=teks, n=desimal, i=bilangan bulat, d=tanggal, t=timestamp). 'id' selalu ada.
+  COLS:{
+    siswa:{nis:'s',nama:'s',jenis_kelamin:'s',tanggal_lahir:'d',kelas:'s',golongan_darah:'s',no_hp:'s',telp_ayah:'s',telp_ibu:'s',alamat:'s',alergi:'s',riwayat_penyakit:'s',tahun_ajaran:'s',created_at:'t'},
+    rekam:{siswa_id:'i',kunjungan_id:'i',tanggal:'t',keluhan:'s',diagnosis:'s',tindakan:'s',obat:'s',catatan:'s',petugas_id:'s',petugas_nama:'s',created_at:'t'},
+    screening:{siswa_id:'i',tanggal:'d',tinggi_badan:'n',berat_badan:'n',imt:'s',tekanan_darah:'s',suhu:'n',nadi:'i',respirasi:'i',gula_darah:'i',mata:'s',telinga:'s',gigi_mulut:'s',kulit:'s',catatan:'s',petugas_id:'s',petugas_nama:'s',created_at:'t'},
+    kunjungan:{siswa_id:'i',tanggal:'t',prioritas:'s',keluhan:'s',gejala:'s',tindakan:'s',catatan:'s',status:'s',petugas_id:'s',petugas_nama:'s',created_at:'t'},
+    obat:{nama:'s',kategori:'s',satuan:'s',stok:'i',stok_min:'i',deskripsi:'s',created_at:'t'},
+    permintaanObat:{obat_id:'i',jumlah:'i',alasan:'s',penerima_type:'s',siswa_id:'i',penerima_nama:'s',kunjungan_id:'i',status:'s',pemohon_id:'s',pemohon_nama:'s',tanggal:'t',approver_id:'s',approver_nama:'s',tanggal_approve:'t',catatan_admin:'s',tanggal_diberikan:'t',created_at:'t'}
+  },
+  toRow(k,r){
+    const o={id:r.id};
+    for(const [c,t] of Object.entries(this.COLS[k])){
+      const v=r[c];
+      if(v===undefined||v===null||v===''){o[c]=(t==='s'&&v==='')?'':(c==='created_at'?new Date().toISOString():null);continue;}
+      if(t==='s')o[c]=String(v);
+      else if(t==='n'){const x=Number(v);o[c]=isNaN(x)?null:x;}
+      else if(t==='i'){const x=Math.round(Number(v));o[c]=isNaN(x)?null:x;}
+      else if(t==='d'){const x=String(v).slice(0,10);o[c]=/^\d{4}-\d{2}-\d{2}$/.test(x)?x:null;}
+      else{const d=new Date(v);o[c]=isNaN(d)?(c==='created_at'?new Date().toISOString():null):d.toISOString();}
+    }
+    return o;
+  },
+  fromRow(k,x){
+    const o={id:x.id};
+    for(const [c,t] of Object.entries(this.COLS[k])){
+      const v=x[c];
+      if(v===undefined||v===null){if(t!=='s')o[c]=null;continue;}
+      o[c]=(t==='t')?new Date(v).toISOString():v;
+    }
+    return o;
+  },
   sess:null,role:null,cred:null,snap:{},setSnap:{},busy:false,dirty:false,timer:null,gen:0,lastId:0,pulledAt:0,
   newId(){let id=Date.now()*1000+Math.floor(Math.random()*1000);if(id<=this.lastId)id=this.lastId+1;this.lastId=id;return id;},
   loadSess(){try{return JSON.parse(localStorage.getItem('uks_sb_session'));}catch{return null;}},
@@ -2450,9 +2473,9 @@ const Cloud={
     if(!p||!p[0]||!p[0].is_active){this.saveSess(null);throw new Error('Akun belum terdaftar/aktif di tabel profiles');}
     this.role=p[0].role;return p[0];
   },
-  async all(tbl,sel){
+  async all(tbl,sel,ord){
     const out=[];
-    for(let o=0;;o+=1000){const rows=await this.req('GET',`/rest/v1/${tbl}?select=${sel}&order=${tbl==='settings'?'key':'id'}&limit=1000&offset=${o}`);out.push(...rows);if(rows.length<1000)break;}
+    for(let o=0;;o+=1000){const rows=await this.req('GET',`/rest/v1/${tbl}?select=${sel}&order=${ord||'id'}&limit=1000&offset=${o}`);out.push(...rows);if(rows.length<1000)break;}
     return out;
   },
   shape(p){
@@ -2469,10 +2492,12 @@ const Cloud={
   },
   async pull(){
     const db={};
-    for(const [k,t] of Object.entries(this.TABLES)){db[k]=(await this.all(t,'id,data')).map(r=>({...r.data,id:r.id}));}
-    const sm={};(await this.all('settings','key,value')).forEach(x=>sm[x.key]=x.value);
-    this.SET_KEYS.forEach(k=>{if(sm[k]!==undefined)db[k]=sm[k];});
-    const boot=sm.tahunAjaran===undefined&&this.role==='admin';   // proyek masih kosong → admin mengisi data awal
+    for(const [k,t] of Object.entries(this.TABLES)){db[k]=(await this.all(t,'*')).map(r=>this.fromRow(k,r));}
+    const kl=await this.all('kelas','nama','urutan'),tr=await this.all('tahun_ajaran','nama,aktif','nama'),pb=await this.all('pembagian_kelas','tahun_ajaran,nis,kelas','tahun_ajaran,nis');
+    if(kl.length)db.kelas=kl.map(x=>x.nama);
+    if(tr.length){db.tahunAjaran=tr.map(x=>x.nama);const a=tr.find(x=>x.aktif);if(a)db.tahunAjaranAktif=a.nama;}
+    db.pembagianKelas={};pb.forEach(x=>{(db.pembagianKelas[x.tahun_ajaran]=db.pembagianKelas[x.tahun_ajaran]||{})[x.nis]=x.kelas;});
+    const boot=!tr.length&&this.role==='admin';   // proyek masih kosong → admin mengisi data awal
     if(boot&&!db.obat.length)db.obat=SEED_OBAT.map(o=>({...o,id:this.newId()}));
     db.users=(await this.req('GET','/rest/v1/profiles?select=*')).map(x=>({id:x.id,username:x.username,full_name:x.full_name,role:x.role,is_active:x.is_active}));
     DB.db=this.shape(db);this.takeSnap(boot);this.pulledAt=Date.now();this.dirty=false;
@@ -2490,25 +2515,29 @@ const Cloud={
     finally{this.busy=false;}
   },
   async pushStaff(){
-    const now=()=>new Date().toISOString();
     for(const [k,t] of Object.entries(this.TABLES)){
       const snap=this.snap[k],ups=[],seen=new Set();
       for(const r of DB.db[k]){seen.add(r.id);const js=JSON.stringify(r);if(snap.get(r.id)!==js)ups.push({r,js});}
       const dels=[...snap.keys()].filter(id=>!seen.has(id));
       for(let i=0;i<ups.length;i+=200){const ch=ups.slice(i,i+200);
-        await this.req('POST',`/rest/v1/${t}?on_conflict=id`,ch.map(x=>({id:x.r.id,data:x.r,updated_at:now()})),{Prefer:'resolution=merge-duplicates,return=minimal'});
+        await this.req('POST',`/rest/v1/${t}?on_conflict=id`,ch.map(x=>this.toRow(k,x.r)),{Prefer:'resolution=merge-duplicates,return=minimal'});
         ch.forEach(x=>snap.set(x.r.id,x.js));}
       for(let i=0;i<dels.length;i+=100){const ch=dels.slice(i,i+100);
         await this.req('DELETE',`/rest/v1/${t}?id=in.(${ch.join(',')})`,undefined,{Prefer:'return=minimal'});ch.forEach(id=>snap.delete(id));}
     }
-    const sets=[];for(const k of this.SET_KEYS){const js=JSON.stringify(DB.db[k]);if(this.setSnap[k]!==js)sets.push({k,js});}
-    if(sets.length){await this.req('POST','/rest/v1/settings?on_conflict=key',sets.map(x=>({key:x.k,value:DB.db[x.k],updated_at:now()})),{Prefer:'resolution=merge-duplicates,return=minimal'});sets.forEach(x=>this.setSnap[x.k]=x.js);}
+    const sets=this.SET_KEYS.filter(k=>this.setSnap[k]!==JSON.stringify(DB.db[k]));
+    if(sets.length){
+      const snapNow=sets.map(k=>[k,JSON.stringify(DB.db[k])]);
+      await this.req('POST','/rest/v1/rpc/uks_save_settings',{p_kelas:DB.db.kelas,p_ta:DB.db.tahunAjaran,p_ta_aktif:DB.db.tahunAjaranAktif,p_pembagian:DB.db.pembagianKelas});
+      snapNow.forEach(([k,js])=>this.setSnap[k]=js);
+    }
   },
   async siswaLogin(u,p){return (await this.req('POST','/rest/v1/rpc/siswa_login',{p_user:u,p_pass:p}))||{ok:false,error:'Respon kosong'};},
   applySiswa(x){
     this.role='siswa';const ta=x.ta||x.siswa.tahun_ajaran||'-';
-    DB.db=this.shape({siswa:[x.siswa],screening:x.screening||[],tahunAjaran:[ta],tahunAjaranAktif:ta,kelas:[]});
-    this.snap={screening:new Map((x.screening||[]).map(r=>[r.id,'x']))};
+    const scr=(x.screening||[]).map(r=>this.fromRow('screening',r));
+    DB.db=this.shape({siswa:[this.fromRow('siswa',x.siswa)],screening:scr,tahunAjaran:[ta],tahunAjaranAktif:ta,kelas:[]});
+    this.snap={screening:new Map(scr.map(r=>[r.id,'x']))};
   },
   async pushSiswa(){
     const known=this.snap.screening,me=DB.db.siswa[0];
@@ -2548,9 +2577,11 @@ async function cloudLogin(){
   try{
     const p=await Cloud.staffLogin(username,password);
     if(p){await Cloud.pull();Session.set({id:p.id,username:p.username,full_name:p.full_name,role:p.role});toast('Login berhasil! Selamat datang, '+p.full_name);View.current='dashboard';View.render();return;}
-    const x=await Cloud.siswaLogin(username,password);
+    const pwS=pwSiswaKirim(password);
+    if(!pwS)return fail('Username atau password salah');
+    const x=await Cloud.siswaLogin(username,pwS);
     if(!x.ok)return fail(x.error||'Username atau password salah');
-    Cloud.cred={u:username,p:password};Cloud.applySiswa(x);
+    Cloud.cred={u:username,p:pwS};Cloud.applySiswa(x);
     Session.set({id:'S'+x.siswa.id,username:username.toLowerCase(),full_name:x.siswa.nama,role:'siswa',siswa_id:x.siswa.id});
     toast('Selamat datang, '+x.siswa.nama);View.current='screening';View.render();
   }catch(e){fail('Gagal terhubung ke server: '+e.message);}
