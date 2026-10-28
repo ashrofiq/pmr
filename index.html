@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.2.4</title>
+<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.2.5</title>
 <meta name="application-name" content="UKS SMANSAQ">
-<meta name="app-version" content="3.2.4">
+<meta name="app-version" content="3.2.5">
 <meta name="description" content="Sistem Informasi UKS SMA Negeri 1 Klirong — rekam medis, screening, kunjungan, permintaan & stok obat.">
 <meta name="theme-color" content="#1e3a5f">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -40,10 +40,11 @@ body{font-family:'Inter',sans-serif}
 
 <script>
 /* ============================================================
-   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.2.4
+   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.2.5
    Single-file Application
    ============================================================ */
 
+// v3.2.5: halaman detail siswa untuk petugas: baris No. HP, Nama Ayah, No. HP Ayah, Nama Ibu, No. HP Ibu dihapus.
 // v3.2.4: tabel Data Siswa untuk petugas: kolom No HP, Nama Ayah, No HP Ayah, Nama Ibu, No HP Ibu dihapus.
 // v3.2.3: tombol Export di menu Data Siswa hanya untuk admin (petugas tidak melihat tombolnya).
 // v3.2.2: nama ayah & ibu disembunyikan untuk non-admin (seperti nomor telepon).
@@ -56,7 +57,7 @@ body{font-family:'Inter',sans-serif}
 // ==================== APP META ====================
 const APP_NAME    = 'UKS SMANSAQ';
 const APP_SUBNAME = 'SMA Negeri 1 Klirong';
-const APP_VERSION = '3.2.4';
+const APP_VERSION = '3.2.5';
 
 // ==================== LOGO (SVG inline, menyerupai logo UKS SMANSAQ) ====================
 const LOGO_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Logo UKS SMANSAQ">'
@@ -533,7 +534,7 @@ function analisaSiswaRawan(){
   }).filter(x=>x&&x.risks.length>0);
 }
 
-// ==================== v3.2.4: HELPER SCREENING ====================
+// ==================== v3.2.5: HELPER SCREENING ====================
 function getSiswaAktif(){const ta=DB.db.tahunAjaranAktif;return DB.db.siswa.filter(s=>!s.tahun_ajaran||s.tahun_ajaran===ta);}
 function getBelumScreening(){const done=new Set(DB.db.screening.map(x=>x.siswa_id));return getSiswaAktif().filter(s=>!done.has(s.id));}
 function parseImtSafe(s){try{return s&&s.imt?JSON.parse(s.imt):null;}catch{return null;}}
@@ -550,7 +551,7 @@ function screeningTabs(active){
   return `<div class="flex flex-wrap gap-2 mb-6 slide-up">${t.map(([id,l,ic])=>`<button onclick="View.go('${id}')" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${active===id?'bg-blue-600 text-white shadow-md shadow-blue-600/30':'bg-white border border-gray-200 text-gray-700 hover:bg-blue-50 hover:text-blue-700'}"><i class="fa-solid ${ic}"></i>${l}${id==='screening-belum'&&belum?`<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${active===id?'bg-white text-blue-700':'bg-amber-500 text-white'}">${belum}</span>`:''}</button>`).join('')}</div>`;
 }
 
-// ==================== v3.2.4: DAFTAR SCREENING ====================
+// ==================== v3.2.5: DAFTAR SCREENING ====================
 function renderScreeningDaftar(page){
   const aktifIds=new Set(getSiswaAktif().map(s=>s.id));
   const all=DB.db.screening.filter(x=>aktifIds.has(x.siswa_id)).map(x=>({...x,_s:DB.find('siswa',x.siswa_id),_imt:parseImtSafe(x)})).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
@@ -616,7 +617,7 @@ function renderScreeningDaftar(page){
   draw();
 }
 
-// ==================== v3.2.4: SISWA BELUM SCREENING ====================
+// ==================== v3.2.5: SISWA BELUM SCREENING ====================
 function renderScreeningBelum(page){
   const aktif=getSiswaAktif();
   const belum=getBelumScreening().sort((a,b)=>String(a.kelas||'').localeCompare(String(b.kelas||''),'id')||String(a.nama).localeCompare(String(b.nama),'id'));
@@ -671,7 +672,7 @@ function renderScreeningBelum(page){
   draw();
 }
 
-// ==================== v3.2.4: AREA SISWA (Dashboard & Riwayat Kesehatan) ====================
+// ==================== v3.2.5: AREA SISWA (Dashboard & Riwayat Kesehatan) ====================
 const RIWAYAT_META={
   screening:{label:'Screening',color:'emerald',icon:'fa-stethoscope'},
   kunjungan:{label:'Kunjungan UKS',color:'indigo',icon:'fa-clipboard-user'},
@@ -1302,11 +1303,11 @@ function renderSiswaDetail(page,id){
             <div class="flex gap-2"><span class="text-gray-500 w-32">Kelas</span><span class="font-medium">: ${esc(siswa.kelas||'-')}</span></div>
             <div class="flex gap-2"><span class="text-gray-500 w-32">Jenis Kelamin</span><span class="font-medium">: ${siswa.jenis_kelamin==='L'?'Laki-laki':'Perempuan'}</span></div>
             <div class="flex gap-2"><span class="text-gray-500 w-32">Tanggal Lahir</span><span class="font-medium">: ${tglLahirTampil(siswa.tanggal_lahir)} (${hitungUmur(siswa.tanggal_lahir)})</span></div>
-            <div class="flex gap-2"><span class="text-gray-500 w-32">No. HP</span><span class="font-medium">: ${telpTampil(siswa.no_hp)}</span></div>
+            ${isAdminNow()?`<div class="flex gap-2"><span class="text-gray-500 w-32">No. HP</span><span class="font-medium">: ${telpTampil(siswa.no_hp)}</span></div>
             <div class="flex gap-2"><span class="text-gray-500 w-32">Nama Ayah</span><span class="font-medium">: ${namaOrtuTampil(siswa.nama_ayah)}</span></div>
             <div class="flex gap-2"><span class="text-gray-500 w-32">No. HP Ayah</span><span class="font-medium">: ${telpTampil(siswa.telp_ayah)}</span></div>
             <div class="flex gap-2"><span class="text-gray-500 w-32">Nama Ibu</span><span class="font-medium">: ${namaOrtuTampil(siswa.nama_ibu)}</span></div>
-            <div class="flex gap-2"><span class="text-gray-500 w-32">No. HP Ibu</span><span class="font-medium">: ${telpTampil(siswa.telp_ibu)}</span></div>
+            <div class="flex gap-2"><span class="text-gray-500 w-32">No. HP Ibu</span><span class="font-medium">: ${telpTampil(siswa.telp_ibu)}</span></div>`:''}
             <div class="flex gap-2"><span class="text-gray-500 w-32">Gol. Darah</span><span class="font-medium">: ${esc(siswa.golongan_darah||'-')}</span></div>
             <div class="flex gap-2"><span class="text-gray-500 w-32">Tahun Ajaran</span><span class="font-medium">: ${esc(siswa.tahun_ajaran||'-')}</span></div>
             <div class="flex gap-2 sm:col-span-2"><span class="text-gray-500 w-32">Alamat</span><span class="font-medium">: ${esc(siswa.alamat||'-')}</span></div>
@@ -2701,7 +2702,7 @@ window.addEventListener('storage',e=>{
   if(Session.user()&&!document.getElementById('modalContainer').innerHTML.trim())View.render();
 });
 
-// ==================== SUPABASE CLOUD (v3.2.4) ====================
+// ==================== SUPABASE CLOUD (v3.2.5) ====================
 // Anon key aman ditaruh di sini (memang publik) SELAMA RLS aktif. JANGAN pernah taruh service_role key di file ini.
 const SUPABASE_URL='https://sixukvhwlsrjkcuchlmj.supabase.co';
 const SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpeHVrdmh3bHNyamtjdWNobG1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNDE1MzYsImV4cCI6MjEwODcxNzUzNn0.lFiYdshcLm8a7TPe_eSLQO81wY0goKlgXqH3eoIL9eY';
@@ -2864,7 +2865,7 @@ const Cloud={
   applySiswa(x){
     this.role='siswa';const ta=x.ta||x.siswa.tahun_ajaran||'-';
     const scr=(x.screening||[]).map(r=>this.fromRow('screening',r));
-    const fr=(k,a)=>(Array.isArray(a)?a:[]).map(r=>this.fromRow(k,r));   // v3.2.4: riwayat lengkap jika RPC siswa_login mengirimnya
+    const fr=(k,a)=>(Array.isArray(a)?a:[]).map(r=>this.fromRow(k,r));   // v3.2.5: riwayat lengkap jika RPC siswa_login mengirimnya
     DB.db=this.shape({siswa:[this.fromRow('siswa',x.siswa)],screening:scr,rekam:fr('rekam',x.rekam),kunjungan:fr('kunjungan',x.kunjungan),permintaanObat:fr('permintaanObat',x.permintaan_obat),obat:fr('obat',x.obat),tahunAjaran:[ta],tahunAjaranAktif:ta,kelas:[]});
     this.snap={screening:new Map(scr.map(r=>[r.id,'x']))};
   },
