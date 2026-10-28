@@ -84,10 +84,21 @@ function initFavicon(){
 
 // ==================== DEFAULT KELAS ====================
 const DEFAULT_KELAS = [
-  'X-1','X-2','X-3','X-4','X-5','X-6','X-7','X-8','X-9','X-10',
-  'XI-1','XI-2','XI-3','XI-4','XI-5','XI-6','XI-7','XI-8','XI-9','XI-10',
-  'XII-1','XII-2','XII-3','XII-4','XII-5','XII-6','XII-7','XII-8','XII-9','XII-10'
+  'X 1','X 2','X 3','X 4','X 5','X 6','X 7','X 8','X 9','X 10',
+  'XI 1','XI 2','XI 3','XI 4','XI 5','XI 6','XI 7','XI 8','XI 9','XI 10',
+  'XII 1','XII 2','XII 3','XII 4','XII 5','XII 6','XII 7','XII 8','XII 9','XII 10'
 ];
+// Format nama kelas: pakai spasi, bukan tanda hubung (X-1 -> X 1)
+function normKelas(k){return String(k==null?'':k).replace(/\s*-\s*/g,' ').replace(/\s+/g,' ').trim();}
+// Ubah format kelas pada data yang sudah ada; mengembalikan true bila ada yang berubah
+function normalizeKelasDb(db){
+  let c=false;
+  if(Array.isArray(db.kelas)){const n=[...new Set(db.kelas.map(normKelas))];if(JSON.stringify(n)!==JSON.stringify(db.kelas)){db.kelas=n;c=true;}}
+  (db.siswa||[]).forEach(x=>{if(x.kelas){const n=normKelas(x.kelas);if(n!==x.kelas){x.kelas=n;c=true;}}});
+  const pb=db.pembagianKelas;
+  if(pb&&typeof pb==='object')Object.values(pb).forEach(m=>{if(m&&typeof m==='object')Object.keys(m).forEach(nis=>{const n=normKelas(m[nis]);if(n!==m[nis]){m[nis]=n;c=true;}});});
+  return c;
+}
 function getKelasList(){ return (DB.db && DB.db.kelas) ? DB.db.kelas : []; }
 
 // ==================== SEED DATA OBAT ====================
@@ -230,6 +241,7 @@ const DB = {
       if(!db.tahunAjaranAktif){db.tahunAjaranAktif=db.tahunAjaran[db.tahunAjaran.length-1];c=true;}
       if(!db.pembagianKelas||typeof db.pembagianKelas!=='object'){db.pembagianKelas={};c=true;}
       (db.siswa||[]).forEach(s=>{if(!s.tahun_ajaran){s.tahun_ajaran=db.tahunAjaranAktif;c=true;}});
+      if(normalizeKelasDb(db))c=true;
       const d={nextUserId:3,nextSiswaId:1,nextRekamId:1,nextScreeningId:1,nextKunjunganId:1,nextObatId:SEED_OBAT.length+1,nextPermintaanObatId:1};
       Object.keys(d).forEach(k=>{if(!db.meta[k]){db.meta[k]=d[k];c=true;}});
       if(c) this.write(db);
@@ -403,7 +415,7 @@ function exportExcel(rows,sheetName,filename){
 }
 function downloadTemplateSiswa(){
   exportExcel([{
-    'NIS':'2024001','Nama':'Contoh Nama Siswa','Kelas':'X-1','Jenis Kelamin (L/P)':'L','Tanggal Lahir (YYYY-MM-DD)':'2008-05-15',
+    'NIS':'2024001','Nama':'Contoh Nama Siswa','Kelas':'X 1','Jenis Kelamin (L/P)':'L','Tanggal Lahir (YYYY-MM-DD)':'2008-05-15',
     'No HP':'08123456789','Nama Ayah':'Contoh Nama Ayah','No HP Ayah':'08123456780','Nama Ibu':'Contoh Nama Ibu','No HP Ibu':'08123456781',
     'Golongan Darah (A/B/AB/O)':'O','Alamat':'Jl. Contoh No. 1, Klirong','Alergi':'Seafood','Riwayat Penyakit':'Asma'
   }],'Template','Template_Import_Siswa.xlsx');
@@ -947,7 +959,7 @@ window.openImportModal = () => {
           return {
             nis:String(g('nis','nomorinduk','nomorinduksiswa')||'').trim(),nama:String(g('nama','namasiswa','namalengkap')||'').trim(),jenis_kelamin:jk,
             tanggal_lahir:parseExcelDate(g('tanggallahir','tgllahir','birth')),
-            kelas:String(g('kelas')||'').trim(),golongan_darah:String(g('golongandarah','goldar','gol')||'').trim().toUpperCase(),
+            kelas:normKelas(g('kelas')),golongan_darah:String(g('golongandarah','goldar','gol')||'').trim().toUpperCase(),
             no_hp:String(g('nohp','nohandphone','hp','telepon','notelepon','wa','phone')||'').trim(),nama_ayah:String(g('namaayah','namabapak','ayah','bapak','namaayahkandung')||'').trim(),nama_ibu:String(g('namaibu','ibu','namaibukandung')||'').trim(),telp_ayah:String(g('nohpayah','telpayah','noteleponayah','notelpayah','teleponayah','hpayah','nohandphoneayah')||'').trim(),telp_ibu:String(g('nohpibu','telpibu','noteleponibu','notelpibu','teleponibu','hpibu','nohandphoneibu')||'').trim(),alamat:String(g('alamat')||'').trim(),
             alergi:String(g('alergi')||'').trim(),riwayat_penyakit:String(g('riwayatpenyakit','riwayat','penyakit')||'').trim(),
             _valid:true,_err:[]
@@ -1812,7 +1824,7 @@ function promosiKelas(kelas, nis, pembagianTA){
   if(!m) return null;
   const tingkat = m[1].toUpperCase(), nomor = m[2];
   if(tingkat === 'XII') return null;
-  if(tingkat === 'XI')  return 'XII-' + nomor;
+  if(tingkat === 'XI')  return 'XII ' + nomor;
   // X → XI: WAJIB dari pembagian kelas
   if(pembagianTA && nis && pembagianTA[String(nis).trim()]) {
     return pembagianTA[String(nis).trim()];
@@ -1873,7 +1885,7 @@ window.prosesTahunAjaranBaru = async () => {
   const kelasXII    = aktifSiswa.filter(s => /^XII[-\s]?\d+$/i.test(s.kelas||'')).length;
 
   let msg = `Proses kenaikan kelas dari ${dariTA} → ${keTA}?\n\n`;
-  msg += `• Kelas XI  → XII : nomor kelas TETAP (XI-1 → XII-1). Ada ${kelasXI} siswa.\n`;
+  msg += `• Kelas XI  → XII : nomor kelas TETAP (XI 1 → XII 1). Ada ${kelasXI} siswa.\n`;
   msg += `• Kelas XII → LULUS : tidak disalin. Ada ${kelasXII} siswa.\n`;
   if(jmlMapping){
     msg += `• Kelas X   → XI : pakai pembagian kelas terupload (${jmlMapping} NIS dari ${kelasX} siswa X).\n`;
@@ -2029,7 +2041,7 @@ window.openPembagianModal = () => {
             return '';
           };
           const nis = String(g('nis','nomorinduk')||'').trim();
-          const kelasBaru = String(g('kelasbaru','kelas_baru','newclass')||'').trim().toUpperCase().replace(/\s+/g,'-');
+          const kelasBaru = String(g('kelasbaru','kelas_baru','newclass')||'').trim().toUpperCase().replace(/[-\s]+/g,' ');
           const nama = String(g('nama')||'').trim();
           const err = [];
           if(!nis) err.push('NIS kosong');
@@ -2152,8 +2164,8 @@ function renderSetting(page){
       <p class="text-xs text-gray-500 mb-4">
         Untuk siswa kelas <b>X yang naik ke XI</b>, kelasnya <b>diacak/ditentukan ulang</b> oleh admin.
         Upload file Excel berisi kolom <code class="bg-gray-100 px-1 rounded">NIS</code> dan <code class="bg-gray-100 rounded px-1">Kelas Baru</code>
-        (misal <code class="bg-gray-100 px-1 rounded">XI-1</code>, <code class="bg-gray-100 px-1 rounded">XI-2</code>, dst).
-        Siswa kelas <b>XI → XII</b> tidak perlu diupload, kelasnya otomatis tetap (XI-1 → XII-1).
+        (misal <code class="bg-gray-100 px-1 rounded">XI 1</code>, <code class="bg-gray-100 px-1 rounded">XI 2</code>, dst).
+        Siswa kelas <b>XI → XII</b> tidak perlu diupload, kelasnya otomatis tetap (XI 1 → XII 1).
       </p>
 
       <div class="flex flex-col sm:flex-row gap-2 mb-4">
@@ -2216,7 +2228,7 @@ function renderSetting(page){
         Fitur ini <b>menyalin</b> siswa dari tahun ajaran lama ke tahun ajaran baru:<br>
         • <b>Kelas X → XI</b>: kelas <b>diacak</b> sesuai file pembagian kelas yang sudah diupload di panel atas.
           Jika belum upload, siswa X akan <b>dilewati</b>.<br>
-        • <b>Kelas XI → XII</b>: kelas <b>tetap</b> (XI-1 → XII-1, XI-2 → XII-2, dst).<br>
+        • <b>Kelas XI → XII</b>: kelas <b>tetap</b> (XI 1 → XII 1, XI 2 → XII 2, dst).<br>
         • <b>Kelas XII</b>: dianggap <b>lulus</b>, tidak disalin.<br>
         Data lama (riwayat kunjungan, screening, rekam medis) <b>tetap tersimpan</b>.
         Setelah proses, import siswa baru (kelas X) untuk tahun ajaran baru.
@@ -2247,7 +2259,7 @@ function renderSetting(page){
         </h3>
       </div>
       <div class="flex gap-2 mb-5">
-        <input id="newKelasName" placeholder="Nama kelas baru, cth: X-11" class="flex-1 border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm" onkeydown="if(event.key==='Enter'){event.preventDefault();addKelas();}"/>
+        <input id="newKelasName" placeholder="Nama kelas baru, cth: X 11" class="flex-1 border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm" onkeydown="if(event.key==='Enter'){event.preventDefault();addKelas();}"/>
         <button onclick="addKelas()" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-sm">
           <i class="fa-solid fa-plus"></i> Tambah
         </button>
@@ -2315,7 +2327,7 @@ function renderSetting(page){
 window.addKelas = () => {
   if(Session.user().role!=='admin'){toast('Hanya admin','error');return;}
   const input=document.getElementById('newKelasName');
-  const nama=input.value.trim();
+  const nama=normKelas(input.value);
   if(!nama){toast('Nama kelas wajib diisi','error');input.focus();return;}
   if(DB.db.kelas.includes(nama)){toast('Kelas sudah ada','error');return;}
   DB.db.kelas.push(nama);
@@ -2531,6 +2543,7 @@ const Cloud={
     const boot=!tr.length&&this.role==='admin';   // proyek masih kosong → admin mengisi data awal
     if(boot&&!db.obat.length)db.obat=SEED_OBAT.map(o=>({...o,id:this.newId()}));
     db.users=(await this.req('GET','/rest/v1/profiles?select=*')).map(x=>({id:x.id,username:x.username,full_name:x.full_name,role:x.role,is_active:x.is_active}));
+    normalizeKelasDb(db);
     DB.db=this.shape(db);this.takeSnap(boot);this.pulledAt=Date.now();this.dirty=false;
     if(boot)this.schedule();
   },
