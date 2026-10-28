@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.2.3</title>
+<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.2.4</title>
 <meta name="application-name" content="UKS SMANSAQ">
-<meta name="app-version" content="3.2.3">
+<meta name="app-version" content="3.2.4">
 <meta name="description" content="Sistem Informasi UKS SMA Negeri 1 Klirong — rekam medis, screening, kunjungan, permintaan & stok obat.">
 <meta name="theme-color" content="#1e3a5f">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -40,10 +40,11 @@ body{font-family:'Inter',sans-serif}
 
 <script>
 /* ============================================================
-   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.2.3
+   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.2.4
    Single-file Application
    ============================================================ */
 
+// v3.2.4: tabel Data Siswa untuk petugas: kolom No HP, Nama Ayah, No HP Ayah, Nama Ibu, No HP Ibu dihapus.
 // v3.2.3: tombol Export di menu Data Siswa hanya untuk admin (petugas tidak melihat tombolnya).
 // v3.2.2: nama ayah & ibu disembunyikan untuk non-admin (seperti nomor telepon).
 // v3.2.1: user petugas: tanggal & bulan lahir siswa disembunyikan, tahun tetap tampil.
@@ -55,7 +56,7 @@ body{font-family:'Inter',sans-serif}
 // ==================== APP META ====================
 const APP_NAME    = 'UKS SMANSAQ';
 const APP_SUBNAME = 'SMA Negeri 1 Klirong';
-const APP_VERSION = '3.2.3';
+const APP_VERSION = '3.2.4';
 
 // ==================== LOGO (SVG inline, menyerupai logo UKS SMANSAQ) ====================
 const LOGO_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Logo UKS SMANSAQ">'
@@ -532,7 +533,7 @@ function analisaSiswaRawan(){
   }).filter(x=>x&&x.risks.length>0);
 }
 
-// ==================== v3.2.3: HELPER SCREENING ====================
+// ==================== v3.2.4: HELPER SCREENING ====================
 function getSiswaAktif(){const ta=DB.db.tahunAjaranAktif;return DB.db.siswa.filter(s=>!s.tahun_ajaran||s.tahun_ajaran===ta);}
 function getBelumScreening(){const done=new Set(DB.db.screening.map(x=>x.siswa_id));return getSiswaAktif().filter(s=>!done.has(s.id));}
 function parseImtSafe(s){try{return s&&s.imt?JSON.parse(s.imt):null;}catch{return null;}}
@@ -549,7 +550,7 @@ function screeningTabs(active){
   return `<div class="flex flex-wrap gap-2 mb-6 slide-up">${t.map(([id,l,ic])=>`<button onclick="View.go('${id}')" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${active===id?'bg-blue-600 text-white shadow-md shadow-blue-600/30':'bg-white border border-gray-200 text-gray-700 hover:bg-blue-50 hover:text-blue-700'}"><i class="fa-solid ${ic}"></i>${l}${id==='screening-belum'&&belum?`<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${active===id?'bg-white text-blue-700':'bg-amber-500 text-white'}">${belum}</span>`:''}</button>`).join('')}</div>`;
 }
 
-// ==================== v3.2.3: DAFTAR SCREENING ====================
+// ==================== v3.2.4: DAFTAR SCREENING ====================
 function renderScreeningDaftar(page){
   const aktifIds=new Set(getSiswaAktif().map(s=>s.id));
   const all=DB.db.screening.filter(x=>aktifIds.has(x.siswa_id)).map(x=>({...x,_s:DB.find('siswa',x.siswa_id),_imt:parseImtSafe(x)})).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
@@ -615,7 +616,7 @@ function renderScreeningDaftar(page){
   draw();
 }
 
-// ==================== v3.2.3: SISWA BELUM SCREENING ====================
+// ==================== v3.2.4: SISWA BELUM SCREENING ====================
 function renderScreeningBelum(page){
   const aktif=getSiswaAktif();
   const belum=getBelumScreening().sort((a,b)=>String(a.kelas||'').localeCompare(String(b.kelas||''),'id')||String(a.nama).localeCompare(String(b.nama),'id'));
@@ -670,7 +671,7 @@ function renderScreeningBelum(page){
   draw();
 }
 
-// ==================== v3.2.3: AREA SISWA (Dashboard & Riwayat Kesehatan) ====================
+// ==================== v3.2.4: AREA SISWA (Dashboard & Riwayat Kesehatan) ====================
 const RIWAYAT_META={
   screening:{label:'Screening',color:'emerald',icon:'fa-stethoscope'},
   kunjungan:{label:'Kunjungan UKS',color:'indigo',icon:'fa-clipboard-user'},
@@ -1061,7 +1062,7 @@ function renderSiswa(page){
       </div>
       <div class="overflow-x-auto">
         <table class="w-full">
-          <thead class="bg-gray-50 border-b border-gray-100"><tr class="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"><th class="px-6 py-3">NIS</th><th class="px-6 py-3">Nama</th><th class="px-6 py-3">Kelas</th><th class="px-6 py-3">JK</th><th class="px-6 py-3">Tanggal Lahir</th><th class="px-6 py-3">No HP</th><th class="px-6 py-3">Nama Ayah</th><th class="px-6 py-3">No HP Ayah</th><th class="px-6 py-3">Nama Ibu</th><th class="px-6 py-3">No HP Ibu</th><th class="px-6 py-3">Umur</th><th class="px-6 py-3">Gol. Darah</th><th class="px-6 py-3">Alergi</th><th class="px-6 py-3">Riwayat Penyakit</th><th class="px-6 py-3 text-right">Aksi</th></tr></thead>
+          <thead class="bg-gray-50 border-b border-gray-100"><tr class="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"><th class="px-6 py-3">NIS</th><th class="px-6 py-3">Nama</th><th class="px-6 py-3">Kelas</th><th class="px-6 py-3">JK</th><th class="px-6 py-3">Tanggal Lahir</th>${isAdmin?`<th class="px-6 py-3">No HP</th><th class="px-6 py-3">Nama Ayah</th><th class="px-6 py-3">No HP Ayah</th><th class="px-6 py-3">Nama Ibu</th><th class="px-6 py-3">No HP Ibu</th>`:''}<th class="px-6 py-3">Umur</th><th class="px-6 py-3">Gol. Darah</th><th class="px-6 py-3">Alergi</th><th class="px-6 py-3">Riwayat Penyakit</th><th class="px-6 py-3 text-right">Aksi</th></tr></thead>
           <tbody id="siswaTbody" class="divide-y divide-gray-100"></tbody>
         </table>
       </div>
@@ -1075,7 +1076,7 @@ function renderSiswa(page){
     list.sort((a,b)=>(a.nama||'').localeCompare(b.nama||''));
     const tb=document.getElementById('siswaTbody');
     document.getElementById('siswaCount').textContent=`${list.length} siswa`;
-    if(!list.length){tb.innerHTML=`<tr><td colspan="15" class="text-center py-10 text-gray-400">Belum ada data siswa</td></tr>`;return;}
+    if(!list.length){tb.innerHTML=`<tr><td colspan="${isAdmin?15:10}" class="text-center py-10 text-gray-400">Belum ada data siswa</td></tr>`;return;}
     const rawanIds=new Set(analisaSiswaRawan().filter(r=>r.level==='tinggi').map(r=>r.siswa.id));
     tb.innerHTML=list.map(s=>`
       <tr class="hover:bg-gray-50">
@@ -1084,11 +1085,11 @@ function renderSiswa(page){
         <td class="px-6 py-4 text-sm text-gray-600">${esc(s.kelas||'-')}</td>
         <td class="px-6 py-4 text-sm text-gray-600">${s.jenis_kelamin==='L'?'L':'P'}</td>
         <td class="px-6 py-4 text-sm text-gray-600">${tglLahirTampil(s.tanggal_lahir)}</td>
-        <td class="px-6 py-4 text-sm text-gray-600">${telpTampil(s.no_hp)}</td>
+        ${isAdmin?`<td class="px-6 py-4 text-sm text-gray-600">${telpTampil(s.no_hp)}</td>
         <td class="px-6 py-4 text-sm text-gray-600">${namaOrtuTampil(s.nama_ayah)}</td>
         <td class="px-6 py-4 text-sm text-gray-600">${telpTampil(s.telp_ayah)}</td>
         <td class="px-6 py-4 text-sm text-gray-600">${namaOrtuTampil(s.nama_ibu)}</td>
-        <td class="px-6 py-4 text-sm text-gray-600">${telpTampil(s.telp_ibu)}</td>
+        <td class="px-6 py-4 text-sm text-gray-600">${telpTampil(s.telp_ibu)}</td>`:''}
         <td class="px-6 py-4 text-sm text-gray-600">${hitungUmur(s.tanggal_lahir)}</td>
         <td class="px-6 py-4 text-sm text-gray-600">${esc(s.golongan_darah||'-')}</td>
         <td class="px-6 py-4 text-sm text-rose-600">${esc(s.alergi||'-')}</td>
@@ -2700,7 +2701,7 @@ window.addEventListener('storage',e=>{
   if(Session.user()&&!document.getElementById('modalContainer').innerHTML.trim())View.render();
 });
 
-// ==================== SUPABASE CLOUD (v3.2.3) ====================
+// ==================== SUPABASE CLOUD (v3.2.4) ====================
 // Anon key aman ditaruh di sini (memang publik) SELAMA RLS aktif. JANGAN pernah taruh service_role key di file ini.
 const SUPABASE_URL='https://sixukvhwlsrjkcuchlmj.supabase.co';
 const SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpeHVrdmh3bHNyamtjdWNobG1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNDE1MzYsImV4cCI6MjEwODcxNzUzNn0.lFiYdshcLm8a7TPe_eSLQO81wY0goKlgXqH3eoIL9eY';
@@ -2863,7 +2864,7 @@ const Cloud={
   applySiswa(x){
     this.role='siswa';const ta=x.ta||x.siswa.tahun_ajaran||'-';
     const scr=(x.screening||[]).map(r=>this.fromRow('screening',r));
-    const fr=(k,a)=>(Array.isArray(a)?a:[]).map(r=>this.fromRow(k,r));   // v3.2.3: riwayat lengkap jika RPC siswa_login mengirimnya
+    const fr=(k,a)=>(Array.isArray(a)?a:[]).map(r=>this.fromRow(k,r));   // v3.2.4: riwayat lengkap jika RPC siswa_login mengirimnya
     DB.db=this.shape({siswa:[this.fromRow('siswa',x.siswa)],screening:scr,rekam:fr('rekam',x.rekam),kunjungan:fr('kunjungan',x.kunjungan),permintaanObat:fr('permintaanObat',x.permintaan_obat),obat:fr('obat',x.obat),tahunAjaran:[ta],tahunAjaranAktif:ta,kelas:[]});
     this.snap={screening:new Map(scr.map(r=>[r.id,'x']))};
   },
