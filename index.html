@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.0.0</title>
+<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.1.0</title>
 <meta name="application-name" content="UKS SMANSAQ">
-<meta name="app-version" content="3.0.0">
+<meta name="app-version" content="3.1.0">
 <meta name="description" content="Sistem Informasi UKS SMA Negeri 1 Klirong — rekam medis, screening, kunjungan, permintaan & stok obat.">
 <meta name="theme-color" content="#1e3a5f">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -40,14 +40,16 @@ body{font-family:'Inter',sans-serif}
 
 <script>
 /* ============================================================
-   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.0.0
+   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.1.0
    Single-file Application
    ============================================================ */
 
+// v3.1.0: siswa belum screening tidak masuk Siswa Rawan; submenu Screening (Form, Daftar, Belum Screening);
+//         area siswa: Dashboard, Screening Mandiri, Riwayat Kesehatan.
 // ==================== APP META ====================
 const APP_NAME    = 'UKS SMANSAQ';
 const APP_SUBNAME = 'SMA Negeri 1 Klirong';
-const APP_VERSION = '3.0.0';
+const APP_VERSION = '3.1.0';
 
 // ==================== LOGO (SVG inline, menyerupai logo UKS SMANSAQ) ====================
 const LOGO_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Logo UKS SMANSAQ">'
@@ -471,12 +473,10 @@ const RISK_CATEGORIES = {
   hipotensi:{label:'Hipotensi',color:'blue',icon:'fa-heart-pulse',desc:'TD < 90/60'},
   demam:{label:'Suhu Tinggi',color:'orange',icon:'fa-temperature-high',desc:'Suhu ≥ 37.5°C'},
   gula_darah:{label:'Gula Darah Abnormal',color:'purple',icon:'fa-droplet',desc:'Gula darah di luar normal'},
-  belum_screening:{label:'Belum Screening',color:'gray',icon:'fa-calendar-xmark',desc:'>6 bulan tidak screening'},
 };
 function parseTD(td){if(!td)return null;const m=String(td).match(/(\d{2,3})\s*\/\s*(\d{2,3})/);if(!m)return null;return {sys:parseInt(m[1]),dia:parseInt(m[2])};}
 function analisaSiswaRawan(){
   const today=new Date();
-  const cut=new Date(today.getFullYear(),today.getMonth()-6,today.getDate()).getTime();
   const taAktif = DB.db.tahunAjaranAktif;
   return DB.db.siswa.filter(s=>!s.tahun_ajaran||s.tahun_ajaran===taAktif).map(s=>{
     const risks=[],details={};
@@ -484,7 +484,7 @@ function analisaSiswaRawan(){
     if(s.riwayat_penyakit&&s.riwayat_penyakit.trim()){risks.push('riwayat');details.riwayat=s.riwayat_penyakit.trim();}
     const scr=DB.db.screening.filter(x=>x.siswa_id===s.id).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
     const last=scr[0];
-    if(!last||new Date(last.tanggal).getTime()<cut){risks.push('belum_screening');details.belum_screening=last?'Terakhir: '+fmtDate(last.tanggal):'Belum pernah';}
+    if(!last)return null;   // v3.1.0: siswa yang belum screening tidak dimasukkan ke siswa rawan
     if(last){
       if(last.imt){try{const imt=JSON.parse(last.imt);
         if(imt.status==='Kurus'){risks.push('gizi_kurang');details.gizi_kurang=`IMT ${imt.imt}`;}
@@ -502,11 +502,246 @@ function analisaSiswaRawan(){
         else if(gd<70){risks.push('gula_darah');details.gula_darah=`${gd} mg/dL (Rendah)`;}
       }
     }
-    const sev=risks.reduce((n,r)=>n+({hipertensi:3,gizi_lebih:3,demam:2,gizi_kurang:2,hipotensi:2,gula_darah:3,alergi:1,riwayat:1,belum_screening:1}[r]||1),0);
+    const sev=risks.reduce((n,r)=>n+({hipertensi:3,gizi_lebih:3,demam:2,gizi_kurang:2,hipotensi:2,gula_darah:3,alergi:1,riwayat:1}[r]||1),0);
     let level='rendah',levelColor='emerald';
     if(sev>=6){level='tinggi';levelColor='rose';}else if(sev>=3){level='sedang';levelColor='amber';}
     return {siswa:s,risks,details,severity:sev,level,levelColor,lastScr:last};
-  }).filter(x=>x.risks.length>0);
+  }).filter(x=>x&&x.risks.length>0);
+}
+
+// ==================== v3.1.0: HELPER SCREENING ====================
+function getSiswaAktif(){const ta=DB.db.tahunAjaranAktif;return DB.db.siswa.filter(s=>!s.tahun_ajaran||s.tahun_ajaran===ta);}
+function getBelumScreening(){const done=new Set(DB.db.screening.map(x=>x.siswa_id));return getSiswaAktif().filter(s=>!done.has(s.id));}
+function parseImtSafe(s){try{return s&&s.imt?JSON.parse(s.imt):null;}catch{return null;}}
+const INP_CLS='w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm bg-white';
+window.toggleNavGroup=id=>{
+  const g=document.getElementById('grp_'+id),c=document.getElementById('chv_'+id);
+  if(g)g.classList.toggle('hidden');if(c)c.classList.toggle('rotate-180');
+};
+
+// ==================== v3.1.0: DAFTAR SCREENING ====================
+function renderScreeningDaftar(page){
+  const aktifIds=new Set(getSiswaAktif().map(s=>s.id));
+  const all=DB.db.screening.filter(x=>aktifIds.has(x.siswa_id)).map(x=>({...x,_s:DB.find('siswa',x.siswa_id),_imt:parseImtSafe(x)})).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
+  const LIMIT=200;let cur=[];
+  page.innerHTML=`
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 slide-up">
+      <div><h2 class="text-3xl font-bold text-gray-800">Daftar Screening</h2><p class="text-gray-500 mt-1">Seluruh hasil screening siswa (TA ${esc(DB.db.tahunAjaranAktif)}) · ${all.length} data</p></div>
+      <div class="flex gap-2">
+        <button onclick="exportScreeningDaftar()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-lg shadow-amber-600/30"><i class="fa-solid fa-file-excel"></i> Export</button>
+        <button onclick="View.go('screening')" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-lg shadow-emerald-600/30"><i class="fa-solid fa-plus"></i> Screening Baru</button>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6 slide-up">
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5"><i class="fa-solid fa-magnifying-glass text-gray-400"></i><input id="sdSearch" type="text" placeholder="Cari nama / NIS..." class="w-full bg-transparent outline-none text-sm"/></div>
+        <select id="sdKelas" class="${INP_CLS}"><option value="">Semua Kelas</option>${kelasOptions('')}</select>
+        <div><input id="sdDari" type="date" title="Dari tanggal" class="${INP_CLS}"/></div>
+        <div><input id="sdSampai" type="date" title="Sampai tanggal" class="${INP_CLS}"/></div>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden slide-up">
+      <div class="p-4 border-b border-gray-100"><span id="sdCount" class="text-sm text-gray-500"></span></div>
+      <div class="overflow-x-auto"><table class="w-full text-sm">
+        <thead class="bg-gray-50"><tr class="text-left text-xs text-gray-500 uppercase"><th class="px-4 py-3">Tanggal</th><th class="px-4 py-3">Siswa</th><th class="px-4 py-3">Kelas</th><th class="px-4 py-3">TB/BB</th><th class="px-4 py-3">IMT</th><th class="px-4 py-3">TD</th><th class="px-4 py-3">Suhu</th><th class="px-4 py-3">Gula</th><th class="px-4 py-3">Petugas</th><th class="px-4 py-3"></th></tr></thead>
+        <tbody id="sdBody" class="divide-y divide-gray-100"></tbody>
+      </table></div>
+    </div>`;
+  const draw=()=>{
+    const q=document.getElementById('sdSearch').value.trim().toLowerCase();
+    const kl=document.getElementById('sdKelas').value;
+    const d1=document.getElementById('sdDari').value,d2=document.getElementById('sdSampai').value;
+    cur=all.filter(x=>{
+      const s=x._s;if(!s)return false;
+      if(kl&&normKelas(s.kelas)!==normKelas(kl))return false;
+      const t=String(x.tanggal).slice(0,10);
+      if(d1&&t<d1)return false;if(d2&&t>d2)return false;
+      if(q&&!((s.nama||'').toLowerCase().includes(q)||String(s.nis||'').toLowerCase().includes(q)))return false;
+      return true;
+    });
+    const shown=cur.slice(0,LIMIT);
+    document.getElementById('sdCount').textContent=cur.length>LIMIT?`Menampilkan ${LIMIT} dari ${cur.length} data (gunakan filter untuk mempersempit)`:`${cur.length} data`;
+    document.getElementById('sdBody').innerHTML=shown.length?shown.map(x=>{
+      const s=x._s,im=x._imt;
+      return `<tr class="hover:bg-gray-50">
+        <td class="px-4 py-3 whitespace-nowrap">${fmtDate(x.tanggal)}</td>
+        <td class="px-4 py-3"><button onclick="View.go('siswa-detail',{id:${s.id}})" class="font-semibold text-gray-800 hover:text-blue-600 text-left">${esc(s.nama)}</button><p class="text-xs text-gray-400">${esc(s.nis)}</p></td>
+        <td class="px-4 py-3 whitespace-nowrap">${esc(s.kelas||'-')}</td>
+        <td class="px-4 py-3 whitespace-nowrap">${x.tinggi_badan||'-'} / ${x.berat_badan||'-'}</td>
+        <td class="px-4 py-3 whitespace-nowrap">${im?`<span class="text-xs px-2 py-1 rounded-full bg-${im.color}-100 text-${im.color}-700 font-semibold">${im.imt} · ${esc(im.status)}</span>`:'-'}</td>
+        <td class="px-4 py-3 whitespace-nowrap">${esc(x.tekanan_darah||'-')}</td>
+        <td class="px-4 py-3 whitespace-nowrap">${x.suhu?x.suhu+'°C':'-'}</td>
+        <td class="px-4 py-3 whitespace-nowrap">${x.gula_darah||'-'}</td>
+        <td class="px-4 py-3 text-xs text-gray-500">${esc(x.petugas_nama||'-')}</td>
+        <td class="px-4 py-3"><button onclick="View.go('siswa-detail',{id:${s.id}})" class="p-2 rounded-lg text-blue-600 hover:bg-blue-50" title="Lihat detail siswa"><i class="fa-solid fa-eye"></i></button></td>
+      </tr>`;}).join(''):`<tr><td colspan="10" class="text-center py-16 text-gray-400"><i class="fa-solid fa-stethoscope text-5xl mb-3 block text-gray-300"></i>Belum ada data screening</td></tr>`;
+  };
+  ['sdSearch','sdKelas','sdDari','sdSampai'].forEach(id=>{const el=document.getElementById(id);el.addEventListener('input',draw);el.addEventListener('change',draw);});
+  window.exportScreeningDaftar=()=>{
+    if(!cur.length)return toast('Tidak ada data untuk diexport','error');
+    exportExcel(cur.map(x=>({'Tanggal':String(x.tanggal).slice(0,10),'NIS':x._s.nis,'Nama':x._s.nama,'Kelas':x._s.kelas||'','TB (cm)':x.tinggi_badan||'','BB (kg)':x.berat_badan||'','IMT':x._imt?x._imt.imt:'','Status Gizi':x._imt?x._imt.status:'','Tekanan Darah':x.tekanan_darah||'','Suhu':x.suhu||'','Nadi':x.nadi||'','Respirasi':x.respirasi||'','Gula Darah':x.gula_darah||'','Mata':x.mata||'','Telinga':x.telinga||'','Gigi & Mulut':x.gigi_mulut||'','Kulit':x.kulit||'','Catatan':x.catatan||'','Petugas':x.petugas_nama||''})),'Daftar Screening',`Daftar_Screening_UKS_${todayISO()}.xlsx`);
+  };
+  draw();
+}
+
+// ==================== v3.1.0: SISWA BELUM SCREENING ====================
+function renderScreeningBelum(page){
+  const aktif=getSiswaAktif();
+  const belum=getBelumScreening().sort((a,b)=>String(a.kelas||'').localeCompare(String(b.kelas||''),'id')||String(a.nama).localeCompare(String(b.nama),'id'));
+  const sudah=aktif.length-belum.length;const pct=aktif.length?Math.round(sudah/aktif.length*100):0;
+  let cur=belum;
+  page.innerHTML=`
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 slide-up">
+      <div><h2 class="text-3xl font-bold text-gray-800">Siswa Belum Screening</h2><p class="text-gray-500 mt-1">Siswa yang belum memiliki data screening (TA ${esc(DB.db.tahunAjaranAktif)}). Siswa ini belum dihitung sebagai siswa rawan.</p></div>
+      <div class="flex gap-2">
+        <button onclick="exportBelumScreening()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-lg shadow-amber-600/30"><i class="fa-solid fa-file-excel"></i> Export</button>
+        <button onclick="cetakBelumScreening()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-lg shadow-emerald-600/30"><i class="fa-solid fa-print"></i> Cetak</button>
+      </div>
+    </div>
+    <div class="grid grid-cols-3 gap-4 mb-4 slide-up">
+      ${card('Total Siswa',aktif.length,'fa-users','blue')}
+      ${card('Sudah Screening',sudah,'fa-circle-check','emerald')}
+      ${card('Belum Screening',belum.length,'fa-user-clock','amber')}
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6 slide-up">
+      <div class="flex justify-between text-xs font-semibold text-gray-600 mb-2"><span>Progres screening</span><span>${pct}%</span></div>
+      <div class="w-full h-3 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-emerald-500 rounded-full" style="width:${pct}%"></div></div>
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden slide-up">
+      <div class="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div class="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 flex-1 max-w-md"><i class="fa-solid fa-magnifying-glass text-gray-400"></i><input id="sbSearch" type="text" placeholder="Cari nama / NIS..." class="w-full bg-transparent outline-none text-sm"/></div>
+        <select id="sbKelas" class="${INP_CLS} sm:w-56"><option value="">Semua Kelas</option>${kelasOptions('')}</select>
+        <span id="sbCount" class="text-sm text-gray-500 sm:ml-auto"></span>
+      </div>
+      <div id="sbList" class="divide-y divide-gray-100"></div>
+    </div>`;
+  const draw=()=>{
+    const q=document.getElementById('sbSearch').value.trim().toLowerCase();const kl=document.getElementById('sbKelas').value;
+    cur=belum.filter(s=>(!kl||normKelas(s.kelas)===normKelas(kl))&&(!q||(s.nama||'').toLowerCase().includes(q)||String(s.nis||'').toLowerCase().includes(q)));
+    document.getElementById('sbCount').textContent=`${cur.length} siswa`;
+    document.getElementById('sbList').innerHTML=cur.length?cur.map(s=>`<div class="p-4 flex items-center gap-4 hover:bg-gray-50">
+      <div class="w-11 h-11 rounded-full bg-amber-100 flex items-center justify-center shrink-0"><i class="fa-solid fa-user-clock text-amber-600"></i></div>
+      <div class="flex-1 min-w-0"><button onclick="View.go('siswa-detail',{id:${s.id}})" class="font-bold text-gray-800 hover:text-blue-600 text-left">${esc(s.nama)}</button><p class="text-xs text-gray-500">${esc(s.nis)} · ${esc(s.kelas||'-')} · ${hitungUmur(s.tanggal_lahir)}</p></div>
+      <button onclick="View.go('screening',{siswa_id:${s.id}})" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shrink-0"><i class="fa-solid fa-stethoscope"></i> Screening</button>
+    </div>`).join(''):`<div class="text-center py-16"><i class="fa-solid fa-circle-check text-5xl text-emerald-300 mb-3"></i><p class="text-gray-500 font-medium">${belum.length?'Tidak ada hasil':'Semua siswa sudah screening 🎉'}</p></div>`;
+  };
+  document.getElementById('sbSearch').addEventListener('input',draw);
+  document.getElementById('sbKelas').addEventListener('change',draw);
+  window.exportBelumScreening=()=>{
+    if(!cur.length)return toast('Tidak ada data untuk diexport','error');
+    exportExcel(cur.map(s=>({'NIS':s.nis,'Nama':s.nama,'Kelas':s.kelas||'','Jenis Kelamin':s.jenis_kelamin==='L'?'Laki-laki':'Perempuan','Umur':hitungUmur(s.tanggal_lahir)})),'Belum Screening',`Siswa_Belum_Screening_${todayISO()}.xlsx`);
+  };
+  window.cetakBelumScreening=()=>{
+    if(!cur.length)return toast('Tidak ada data untuk dicetak','error');
+    printReport({title:'Daftar Siswa Belum Screening',subtitle:APP_SUBNAME,meta:`TA ${DB.db.tahunAjaranAktif} · Belum screening: ${cur.length} dari ${aktif.length} siswa`,headers:['No','NIS','Nama','Kelas','L/P','Umur'],rows:cur.map((s,i)=>[i+1,s.nis,s.nama,s.kelas||'-',s.jenis_kelamin||'-',hitungUmur(s.tanggal_lahir)])});
+  };
+  draw();
+}
+
+// ==================== v3.1.0: AREA SISWA (Dashboard & Riwayat Kesehatan) ====================
+const RIWAYAT_META={
+  screening:{label:'Screening',color:'emerald',icon:'fa-stethoscope'},
+  kunjungan:{label:'Kunjungan UKS',color:'indigo',icon:'fa-clipboard-user'},
+  rekam:{label:'Rekam Medis',color:'blue',icon:'fa-notes-medical'},
+  permintaan:{label:'Permintaan Obat',color:'amber',icon:'fa-pills'}
+};
+function buildRiwayatSiswa(id){
+  const items=[];const ms=d=>{const t=new Date(d).getTime();return isNaN(t)?0:t;};
+  DB.db.screening.filter(x=>x.siswa_id===id).forEach(s=>{
+    const im=parseImtSafe(s);
+    items.push({type:'screening',ms:ms(s.tanggal),waktu:fmtDate(s.tanggal),title:'Screening Kesehatan',
+      badge:im?{text:`IMT ${im.imt} · ${im.status}`,color:im.color||'gray'}:null,
+      rows:[['Tinggi / Berat',(s.tinggi_badan||s.berat_badan)?`${s.tinggi_badan||'-'} cm / ${s.berat_badan||'-'} kg`:''],['Tekanan darah',s.tekanan_darah],['Suhu',s.suhu?s.suhu+' °C':''],['Nadi',s.nadi?s.nadi+' x/mnt':''],['Respirasi',s.respirasi?s.respirasi+' x/mnt':''],['Gula darah',s.gula_darah?s.gula_darah+' mg/dL':''],['Mata',s.mata],['Telinga',s.telinga],['Gigi & mulut',s.gigi_mulut],['Kulit',s.kulit],['Catatan',s.catatan],['Petugas',s.petugas_nama]]});
+  });
+  DB.db.kunjungan.filter(x=>x.siswa_id===id).forEach(k=>{
+    const st=STATUS_KUNJUNGAN[k.status];
+    items.push({type:'kunjungan',ms:ms(k.tanggal),waktu:fmtDateTime(k.tanggal),title:k.keluhan||'Kunjungan UKS',badge:st?{text:st.label,color:st.color}:null,
+      rows:[['Gejala',k.gejala],['Prioritas',k.prioritas],['Tindakan',k.tindakan],['Catatan',k.catatan],['Petugas',k.petugas_nama]]});
+  });
+  DB.db.rekam.filter(x=>x.siswa_id===id).forEach(r=>{
+    items.push({type:'rekam',ms:ms(r.tanggal),waktu:fmtDateTime(r.tanggal),title:r.keluhan||'Rekam Medis',badge:r.diagnosis?{text:r.diagnosis,color:'blue'}:null,
+      rows:[['Diagnosis',r.diagnosis],['Tindakan',r.tindakan],['Obat',r.obat],['Catatan',r.catatan],['Petugas',r.petugas_nama]]});
+  });
+  DB.db.permintaanObat.filter(p=>p.siswa_id===id).forEach(p=>{
+    const st=STATUS_PERMINTAAN[p.status];const ob=DB.find('obat',p.obat_id);
+    items.push({type:'permintaan',ms:ms(p.tanggal),waktu:fmtDateTime(p.tanggal),title:`${ob?.nama||'Obat'} × ${p.jumlah||'-'}${ob?.satuan?' '+ob.satuan:''}`,badge:st?{text:st.label,color:st.color}:null,
+      rows:[['Alasan',p.alasan],['Catatan admin',p.catatan_admin],['Diberikan',p.tanggal_diberikan?fmtDateTime(p.tanggal_diberikan):'']]});
+  });
+  return items.sort((a,b)=>b.ms-a.ms);
+}
+function riwayatItemHTML(it){
+  const m=RIWAYAT_META[it.type];
+  const rows=it.rows.filter(r=>r[1]!==undefined&&r[1]!==null&&String(r[1]).trim()!=='');
+  return `<div class="flex gap-3">
+    <div class="w-10 h-10 rounded-full bg-${m.color}-100 flex items-center justify-center shrink-0"><i class="fa-solid ${m.icon} text-${m.color}-600"></i></div>
+    <div class="flex-1 min-w-0 bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+      <div class="flex flex-wrap items-start justify-between gap-2 mb-1">
+        <div class="min-w-0"><p class="text-[10px] font-bold uppercase text-${m.color}-600">${m.label}</p><p class="font-semibold text-gray-800 text-sm">${esc(it.title)}</p></div>
+        <div class="text-right"><p class="text-xs text-gray-500">${it.waktu}</p>${it.badge?`<span class="inline-block mt-1 text-[11px] px-2 py-0.5 rounded-full bg-${it.badge.color}-100 text-${it.badge.color}-700 font-semibold">${esc(it.badge.text)}</span>`:''}</div>
+      </div>
+      ${rows.length?`<div class="grid sm:grid-cols-2 gap-x-6 gap-y-1 mt-2 text-xs">${rows.map(r=>`<div class="flex gap-2"><span class="text-gray-400 w-28 shrink-0">${r[0]}</span><span class="text-gray-700 font-medium">${esc(r[1])}</span></div>`).join('')}</div>`:''}
+    </div></div>`;
+}
+
+function renderDashboardSiswa(page){
+  const u=Session.user();const me=DB.find('siswa',u.siswa_id);
+  if(!me){page.innerHTML='<div class="text-center py-20 text-gray-500">Data siswa tidak ditemukan</div>';return;}
+  const items=buildRiwayatSiswa(me.id);
+  const scr=DB.db.screening.filter(x=>x.siswa_id===me.id).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
+  const last=scr[0];const im=last?parseImtSafe(last):null;
+  const cnt=t=>items.filter(i=>i.type===t).length;
+  const tile=(label,val,icon,color)=>val?`<div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100"><div class="flex items-center gap-2 text-xs text-gray-500 mb-1"><i class="fa-solid ${icon} text-${color}-600"></i>${label}</div><p class="text-lg font-bold text-gray-800">${esc(val)}</p></div>`:'';
+  page.innerHTML=`
+    <div class="mb-6 slide-up"><h2 class="text-3xl font-bold text-gray-800">Dashboard</h2><p class="text-gray-500 mt-1">Selamat datang, <span class="font-semibold text-blue-600">${esc(me.nama)}</span> 👋 <span class="text-xs bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-full ml-2">TA ${esc(DB.db.tahunAjaranAktif)}</span></p></div>
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-4 flex items-center gap-4 slide-up">
+      <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-bold text-2xl shrink-0">${esc(me.nama.charAt(0).toUpperCase())}</div>
+      <div class="min-w-0"><p class="font-bold text-gray-800 text-lg truncate">${esc(me.nama)}</p><p class="text-sm text-gray-500">NIS ${esc(me.nis)} · Kelas ${esc(me.kelas||'-')} · ${hitungUmur(me.tanggal_lahir)}</p></div>
+    </div>
+    ${last?`<div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-4 flex items-center gap-3 slide-up"><i class="fa-solid fa-circle-check text-emerald-600 text-xl"></i><div class="flex-1"><p class="font-semibold text-emerald-800 text-sm">Screening terakhir: ${fmtDate(last.tanggal)}</p><p class="text-xs text-emerald-700">Kamu bisa memperbarui data kesehatanmu kapan saja.</p></div><button onclick="View.go('screening')" class="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">Screening Lagi</button></div>`
+    :`<div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5 mb-4 flex items-center gap-4 slide-up"><div class="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center shrink-0"><i class="fa-solid fa-stethoscope text-amber-600 text-xl"></i></div><div class="flex-1"><p class="font-bold text-amber-800">Kamu belum melakukan screening</p><p class="text-xs text-amber-700">Isi Screening Kesehatan Mandiri agar data kesehatanmu tercatat di UKS.</p></div><button onclick="View.go('screening')" class="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold shrink-0">Mulai</button></div>`}
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      ${card('Screening',cnt('screening'),'fa-stethoscope','emerald')}
+      ${card('Kunjungan UKS',cnt('kunjungan'),'fa-clipboard-user','indigo')}
+      ${card('Rekam Medis',cnt('rekam'),'fa-notes-medical','blue')}
+      ${card('Permintaan Obat',cnt('permintaan'),'fa-pills','amber')}
+    </div>
+    ${last?`<h3 class="font-bold text-gray-800 mb-3 slide-up">Hasil Screening Terakhir</h3>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 slide-up">
+      ${tile('Tinggi Badan',last.tinggi_badan?last.tinggi_badan+' cm':'','fa-ruler-vertical','blue')}
+      ${tile('Berat Badan',last.berat_badan?last.berat_badan+' kg':'','fa-weight-scale','blue')}
+      ${tile('IMT',im?`${im.imt} (${im.status})`:'','fa-chart-simple',im?.color||'gray')}
+      ${tile('Tekanan Darah',last.tekanan_darah,'fa-heart-pulse','rose')}
+      ${tile('Suhu',last.suhu?last.suhu+' °C':'','fa-temperature-half','orange')}
+      ${tile('Nadi',last.nadi?last.nadi+' x/mnt':'','fa-heart','rose')}
+      ${tile('Gula Darah',last.gula_darah?last.gula_darah+' mg/dL':'','fa-droplet','purple')}
+    </div>`:''}
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6 slide-up">
+      <h3 class="font-bold text-gray-800 mb-3 flex items-center gap-2"><i class="fa-solid fa-notes-medical text-amber-600"></i> Data Kesehatan Dasar</h3>
+      <div class="grid sm:grid-cols-3 gap-3 text-sm"><div><p class="text-xs text-gray-400 uppercase">Golongan Darah</p><p class="font-semibold text-gray-800">${esc(me.golongan_darah||'-')}</p></div><div><p class="text-xs text-gray-400 uppercase">Alergi</p><p class="font-semibold text-rose-600">${esc(me.alergi||'-')}</p></div><div><p class="text-xs text-gray-400 uppercase">Riwayat Penyakit</p><p class="font-semibold text-gray-800">${esc(me.riwayat_penyakit||'-')}</p></div></div>
+    </div>
+    <div class="flex items-center justify-between mb-3 slide-up"><h3 class="font-bold text-gray-800">Aktivitas Terbaru</h3><button onclick="View.go('riwayat')" class="text-xs text-blue-600 font-semibold hover:underline">Lihat semua riwayat →</button></div>
+    <div class="space-y-3 slide-up">${items.length?items.slice(0,5).map(riwayatItemHTML).join(''):'<div class="bg-white rounded-2xl border border-gray-100 p-8 text-center text-gray-400 text-sm">Belum ada riwayat kesehatan</div>'}</div>`;
+}
+
+function renderRiwayatSiswa(page){
+  const u=Session.user();const me=DB.find('siswa',u.siswa_id);
+  if(!me){page.innerHTML='<div class="text-center py-20 text-gray-500">Data siswa tidak ditemukan</div>';return;}
+  const items=buildRiwayatSiswa(me.id);let active='all';
+  const cnt=t=>t==='all'?items.length:items.filter(i=>i.type===t).length;
+  page.innerHTML=`
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 slide-up">
+      <div><h2 class="text-3xl font-bold text-gray-800">Riwayat Kesehatan</h2><p class="text-gray-500 mt-1">Seluruh catatan kesehatanmu di UKS: screening, kunjungan, rekam medis & permintaan obat</p></div>
+      <button onclick="cetakRiwayatSiswa(${me.id})" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-gray-700 hover:bg-gray-800 text-white font-semibold shadow-lg shadow-gray-700/30"><i class="fa-solid fa-print"></i> Cetak</button>
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6 slide-up"><div id="rwChips" class="flex flex-wrap gap-2"></div></div>
+    <div id="rwList" class="space-y-3 slide-up"></div>`;
+  const draw=()=>{
+    document.getElementById('rwChips').innerHTML=[['all','Semua','fa-list','blue'],...Object.entries(RIWAYAT_META).map(([k,m])=>[k,m.label,m.icon,m.color])].map(([k,l,ic,c])=>`<button onclick="filterRiwayat('${k}')" class="px-3 py-2 rounded-lg text-sm font-medium ${active===k?'bg-blue-600 text-white':'bg-gray-100 hover:bg-gray-200 text-gray-700'}"><i class="fa-solid ${ic} mr-1 ${active===k?'':'text-'+c+'-600'}"></i>${l} <span class="ml-1 text-xs opacity-70">(${cnt(k)})</span></button>`).join('');
+    const list=active==='all'?items:items.filter(i=>i.type===active);
+    document.getElementById('rwList').innerHTML=list.length?list.map(riwayatItemHTML).join(''):'<div class="bg-white rounded-2xl border border-gray-100 p-12 text-center"><i class="fa-solid fa-clock-rotate-left text-5xl text-gray-300 mb-3"></i><p class="text-gray-500">Belum ada riwayat</p></div>';
+  };
+  window.filterRiwayat=k=>{active=k;draw();};
+  draw();
 }
 
 // ==================== STATUS ====================
@@ -530,11 +765,12 @@ const View = {
   render(){
     const user=Session.user();
     if(!user){this.current='login';document.getElementById('modalContainer').innerHTML='';renderLogin();return;}
-    const allowed=['dashboard','siswa','siswa-detail','screening','permintaan','kunjungan','rawan','laporan','setting','obat'];
+    const allowed=['dashboard','siswa','siswa-detail','screening','screening-daftar','screening-belum','riwayat','permintaan','kunjungan','rawan','laporan','setting','obat'];
     if(!allowed.includes(this.current))this.current='dashboard';
     if(this.current==='setting'&&user.role!=='admin')this.current='dashboard';
     if(this.current==='obat'&&user.role!=='admin')this.current='dashboard';
-    if(user.role==='siswa')this.current='screening';
+    if(user.role==='siswa'){if(!['dashboard','screening','riwayat'].includes(this.current))this.current='dashboard';}
+    else if(this.current==='riwayat')this.current='dashboard';
     renderShell();
   },
   go(page,params={}){this.current=page;this.params=params;window.scrollTo(0,0);this.render();}
@@ -629,10 +865,17 @@ function renderShell(){
   const permintaanPending=DB.db.permintaanObat.filter(p=>p.status==='menunggu').length;
   const stokRendah=DB.db.obat.filter(o=>o.stok<=o.stok_min).length;
 
+  const belumCount=user.role==='siswa'?0:getBelumScreening().length;
   const menu = [
-    { id:'dashboard', icon:'fa-gauge-high',  label:'Dashboard',         roles:['admin','petugas'] },
+    { id:'dashboard', icon:'fa-gauge-high',  label:'Dashboard',         roles:['admin','petugas','siswa'] },
     { id:'siswa',     icon:'fa-users',       label:'Data Siswa',        roles:['admin','petugas'] },
-    { id:'screening', icon:'fa-stethoscope', label:'Screening',         roles:['admin','petugas','siswa'] },
+    { id:'screening-grp', icon:'fa-stethoscope', label:'Screening',     roles:['admin','petugas'], badge: belumCount, badgeColor:'amber', children:[
+      { id:'screening',        icon:'fa-file-pen',   label:'Form Screening' },
+      { id:'screening-daftar', icon:'fa-list-check', label:'Daftar Screening' },
+      { id:'screening-belum',  icon:'fa-user-clock', label:'Belum Screening' },
+    ]},
+    { id:'screening', icon:'fa-stethoscope', label:'Screening Mandiri', roles:['siswa'] },
+    { id:'riwayat',   icon:'fa-clock-rotate-left', label:'Riwayat Kesehatan', roles:['siswa'] },
     { id:'permintaan',icon:'fa-pills',       label:'Permintaan Obat',   roles:['admin','petugas'], badge: permintaanPending, badgeColor:'amber' },
     { id:'kunjungan', icon:'fa-clipboard-user',label:'Registrasi Pasien',roles:['admin','petugas'], badge: kunjunganAktif, badgeColor:'blue' },
     { id:'rawan',     icon:'fa-user-injured',label:'Siswa Rawan',       roles:['admin','petugas'], badge: rawanCount, badgeColor:'rose' },
@@ -641,11 +884,22 @@ function renderShell(){
     { id:'setting',   icon:'fa-gear',        label:'Setting',           roles:['admin'] },
   ];
 
+  const badgeOf = m => m.badge ? `<span class="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full ${m.badgeColor==='rose'?'bg-rose-500':m.badgeColor==='amber'?'bg-amber-500':'bg-blue-500'} text-white">${m.badge}</span>` : '';
   const nav = menu.filter(m=>m.roles.includes(user.role)).map(m=>{
+    if(m.children){
+      const childActive = m.children.some(c=>c.id===View.current);
+      return `<div>
+        <button onclick="toggleNavGroup('${m.id}')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left ${childActive?'bg-blue-50 text-blue-700':'text-gray-600 hover:bg-blue-50 hover:text-blue-700'}">
+          <i class="fa-solid ${m.icon} w-4 text-center text-sm"></i><span class="font-medium text-sm">${m.label}</span>${badgeOf(m)}<i id="chv_${m.id}" class="fa-solid fa-chevron-down text-[10px] ${m.badge?'ml-1':'ml-auto'} transition-transform ${childActive?'rotate-180':''}"></i>
+        </button>
+        <div id="grp_${m.id}" class="${childActive?'':'hidden'} mt-0.5 ml-5 pl-3 border-l border-gray-200 space-y-0.5">
+          ${m.children.map(c=>{const ca=View.current===c.id;return `<button onclick="View.go('${c.id}')" class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all text-left ${ca?'bg-blue-600 text-white shadow-md shadow-blue-600/30':'text-gray-600 hover:bg-blue-50 hover:text-blue-700'}"><i class="fa-solid ${c.icon} w-4 text-center text-xs"></i><span class="font-medium text-[13px]">${c.label}</span></button>`;}).join('')}
+        </div>
+      </div>`;
+    }
     const active = View.current===m.id || (m.id==='siswa'&&View.current==='siswa-detail');
-    const badge = m.badge ? `<span class="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full ${m.badgeColor==='rose'?'bg-rose-500':m.badgeColor==='amber'?'bg-amber-500':'bg-blue-500'} text-white">${m.badge}</span>` : '';
     return `<button onclick="View.go('${m.id}')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left ${active?'bg-blue-600 text-white shadow-md shadow-blue-600/30':'text-gray-600 hover:bg-blue-50 hover:text-blue-700'}">
-      <i class="fa-solid ${m.icon} w-4 text-center text-sm"></i><span class="font-medium text-sm">${m.label}</span>${badge}</button>`;
+      <i class="fa-solid ${m.icon} w-4 text-center text-sm"></i><span class="font-medium text-sm">${m.label}</span>${badgeOf(m)}</button>`;
   }).join('');
 
   const taAktif = DB.db.tahunAjaranAktif || '-';
@@ -692,7 +946,8 @@ function renderShell(){
 
   const page = document.getElementById('page');
   const renderers = {
-    dashboard:renderDashboard, siswa:renderSiswa, rawan:renderSiswaRawan,
+    dashboard:(p)=>user.role==='siswa'?renderDashboardSiswa(p):renderDashboard(p), siswa:renderSiswa, rawan:renderSiswaRawan,
+    'screening-daftar':renderScreeningDaftar, 'screening-belum':renderScreeningBelum, riwayat:renderRiwayatSiswa,
     screening:renderScreening, kunjungan:renderKunjungan, permintaan:renderPermintaan,
     obat:renderStokObat, laporan:renderLaporan, setting:renderSetting
   };
@@ -717,6 +972,7 @@ function renderDashboard(page){
   const bulanIni=d=>{const dt=new Date(d);return dt.getFullYear()===now.getFullYear()&&dt.getMonth()===now.getMonth();};
   const hariIni=d=>String(d).startsWith(todayISO());
   const rawan=analisaSiswaRawan();
+  const belumScr=getBelumScreening();
   const siswaAktif=DB.db.siswa.filter(s=>!s.tahun_ajaran||s.tahun_ajaran===taAktif);
   const kunjunganHariIni=DB.db.kunjungan.filter(k=>hariIni(k.tanggal));
   const kunjunganAktif=DB.db.kunjungan.filter(k=>k.status==='menunggu'||k.status==='diperiksa');
@@ -730,6 +986,7 @@ function renderDashboard(page){
     ${stats.kunjunganAktif?`<button onclick="View.go('kunjungan')" class="w-full text-left bg-gradient-to-r from-blue-500 to-blue-700 rounded-2xl p-6 text-white shadow-lg shadow-blue-600/30 mb-4 slide-up"><div class="flex items-center gap-4"><div class="w-14 h-14 rounded-full bg-white/20 backdrop-blur flex items-center justify-center pulse-ring-blue"><i class="fa-solid fa-clipboard-user text-2xl"></i></div><div class="flex-1"><p class="font-bold text-lg">📋 ${stats.kunjunganAktif} Pasien Aktif di UKS</p><p class="text-blue-100 text-sm">${stats.kunjunganHariIni} kunjungan hari ini</p></div><i class="fa-solid fa-arrow-right text-xl"></i></div></button>`:''}
     ${stats.permintaanPending?`<button onclick="View.go('permintaan')" class="w-full text-left bg-gradient-to-r from-amber-500 to-amber-700 rounded-2xl p-4 text-white shadow-lg shadow-amber-600/30 mb-4 slide-up"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-full bg-white/20 backdrop-blur flex items-center justify-center"><i class="fa-solid fa-pills text-xl"></i></div><div class="flex-1"><p class="font-bold">💊 ${stats.permintaanPending} Permintaan Obat Menunggu</p><p class="text-amber-100 text-xs">${user.role==='admin'?'Klik untuk meninjau':'Menunggu persetujuan admin'}</p></div><i class="fa-solid fa-arrow-right"></i></div></button>`:''}
     ${stats.siswaRawan?`<button onclick="View.go('rawan')" class="w-full text-left bg-gradient-to-r from-rose-500 to-rose-700 rounded-2xl p-4 text-white shadow-lg shadow-rose-600/30 mb-6 slide-up"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-full bg-white/20 backdrop-blur flex items-center justify-center pulse-ring"><i class="fa-solid fa-user-injured text-xl"></i></div><div class="flex-1"><p class="font-bold">⚠ ${stats.siswaRawan} Siswa Rawan Terdeteksi</p><p class="text-rose-100 text-xs">${rawan.filter(r=>r.level==='tinggi').length} siswa risiko tinggi</p></div><i class="fa-solid fa-arrow-right"></i></div></button>`:'<div class="mb-6"></div>'}
+    ${belumScr.length?`<button onclick="View.go('screening-belum')" class="w-full text-left bg-white border-2 border-amber-200 hover:bg-amber-50 rounded-2xl p-4 mb-6 slide-up"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center"><i class="fa-solid fa-user-clock text-amber-600 text-xl"></i></div><div class="flex-1"><p class="font-bold text-amber-800">${belumScr.length} Siswa Belum Screening</p><p class="text-xs text-amber-700">Klik untuk melihat daftar siswa yang belum screening</p></div><i class="fa-solid fa-chevron-right text-amber-400"></i></div></button>`:''}
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
       ${card('Total Siswa',stats.totalSiswa,'fa-users','blue')}
       ${card('Kunjungan Hari Ini',stats.kunjunganHariIni,'fa-clipboard-user','indigo')}
@@ -1080,10 +1337,11 @@ window.cetakRiwayatSiswa = id => {
   const rkm=DB.db.rekam.filter(r=>r.siswa_id===id).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
   const scr=DB.db.screening.filter(r=>r.siswa_id===id).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
   const kjn=DB.db.kunjungan.filter(r=>r.siswa_id===id).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
-  const risk=analisaSiswaRawan().find(x=>x.siswa.id===id);
+  const risk=Session.user()?.role==='siswa'?null:analisaSiswaRawan().find(x=>x.siswa.id===id);
   const rows=[];
   kjn.forEach(k=>rows.push(['Kunjungan',fmtDateTime(k.tanggal),k.keluhan,'-',k.tindakan||'-',STATUS_KUNJUNGAN[k.status]?.label||k.status]));
   scr.forEach(s=>{const imt=s.imt?JSON.parse(s.imt):null;rows.push(['Screening',fmtDate(s.tanggal),`TB: ${s.tinggi_badan||'-'} cm, BB: ${s.berat_badan||'-'} kg`,imt?`${imt.imt} (${imt.status})`:'-',`TD: ${s.tekanan_darah||'-'}, Suhu: ${s.suhu||'-'}°C, Gula: ${s.gula_darah||'-'} mg/dL`,'-']);});
+  DB.db.permintaanObat.filter(p=>p.siswa_id===id).forEach(p=>rows.push(['Permintaan Obat',fmtDateTime(p.tanggal),p.alasan||'-','-',(DB.find('obat',p.obat_id)?.nama||'Obat')+' x'+(p.jumlah||'-'),STATUS_PERMINTAAN[p.status]?.label||p.status]));
   rkm.forEach(r=>rows.push(['Rekam Medis',fmtDateTime(r.tanggal),r.keluhan,r.diagnosis||'-',r.tindakan||'-',r.obat||'-']));
   const footer=`<div style="margin-top:16px;padding:10px;border:1px solid #333;font-size:11px"><p style="margin:0 0 4px;font-weight:600">Biodata:</p><p style="margin:2px 0">NIS: ${esc(sw.nis)} · Nama: ${esc(sw.nama)} · Kelas: ${esc(sw.kelas||'-')} · TA: ${esc(sw.tahun_ajaran||'-')}</p><p style="margin:2px 0">Alergi: ${esc(sw.alergi||'-')} · Riwayat: ${esc(sw.riwayat_penyakit||'-')}</p>${risk?`<p style="margin:6px 0 0;font-weight:600;color:#dc2626">⚠ Rawan: ${risk.level.toUpperCase()} (skor ${risk.severity})</p>`:''}</div>`;
   printReport({title:'Riwayat Kesehatan Siswa',subtitle:sw.nama,meta:`NIS: ${sw.nis}`,headers:['Jenis','Tanggal','Keluhan','Diagnosis/IMT','Tindakan','Catatan/Status'],rows,footer});
@@ -1097,7 +1355,7 @@ function renderScreening(page){
   if(!siswaList.length){page.innerHTML=`<div class="text-center py-20 slide-up"><i class="fa-solid fa-users-slash text-6xl text-gray-300 mb-4"></i><p class="text-gray-500 mb-4">Belum ada data siswa.</p></div>`;return;}
   const preKelas = preId ? (DB.find('siswa',preId)?.kelas || '') : '';
   page.innerHTML = `
-    <div class="mb-6 slide-up"><h2 class="text-3xl font-bold text-gray-800">Form Screening Kesehatan</h2><p class="text-gray-500 mt-1">Input data pemeriksaan berkala siswa (TA ${esc(DB.db.tahunAjaranAktif)})</p></div>
+    <div class="mb-6 slide-up"><h2 class="text-3xl font-bold text-gray-800">${isSiswa?'Screening Kesehatan Mandiri':'Form Screening Kesehatan'}</h2><p class="text-gray-500 mt-1">${isSiswa?'Isi data pemeriksaan kesehatanmu secara mandiri':'Input data pemeriksaan berkala siswa'} (TA ${esc(DB.db.tahunAjaranAktif)})</p></div>
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 max-w-4xl slide-up">
       <form id="screeningForm" class="space-y-6">
         ${isSiswa&&meSiswa?siswaSelfBox(meSiswa):kelasSiswaSelectHTML('sc_kelas','sc_siswa',{selectedKelas:preKelas,selectedSiswa:preId})}
@@ -1145,10 +1403,6 @@ function renderScreening(page){
   document.getElementById('sc_siswa').addEventListener('change',fillKes);
   document.getElementById('screeningForm').addEventListener('reset',()=>setTimeout(fillKes,0));
   fillKes();
-  if(isSiswa&&meSiswa){
-    const hist=DB.db.screening.filter(x=>x.siswa_id===meSiswa.id).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal)).slice(0,10);
-    page.insertAdjacentHTML('beforeend',`<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 max-w-4xl mt-6"><h3 class="font-semibold text-gray-800 mb-3">Riwayat Screening Saya</h3>${hist.length?`<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-left text-xs text-gray-500 uppercase"><th class="py-2 pr-4">Tanggal</th><th class="pr-4">TB</th><th class="pr-4">BB</th><th class="pr-4">IMT</th><th>TD</th></tr></thead><tbody>${hist.map(x=>{const im=x.imt?JSON.parse(x.imt):null;return `<tr class="border-t border-gray-100"><td class="py-2 pr-4">${fmtDate(x.tanggal)}</td><td class="pr-4">${x.tinggi_badan||'-'}</td><td class="pr-4">${x.berat_badan||'-'}</td><td class="pr-4">${im?esc(im.imt+' ('+im.status+')'):'-'}</td><td>${esc(x.tekanan_darah||'-')}</td></tr>`}).join('')}</tbody></table></div>`:'<p class="text-sm text-gray-400">Belum ada screening.</p>'}</div>`);
-  }
   const updateIMT=()=>{const tb=parseFloat(document.getElementById('sc_tb').value);const bb=parseFloat(document.getElementById('sc_bb').value);const r=hitungIMT(bb,tb);document.getElementById('sc_imt').value=r?`${r.imt} (${r.status})`:'';};
   document.getElementById('sc_tb').oninput=updateIMT;
   document.getElementById('sc_bb').oninput=updateIMT;
@@ -1163,7 +1417,7 @@ function renderScreening(page){
     syncKesehatanSiswa(siswa_id);
     DB.insert('screening',{siswa_id,tanggal:document.getElementById('sc_tanggal').value,tinggi_badan:tb,berat_badan:bb,imt:r?JSON.stringify(r):null,tekanan_darah:document.getElementById('sc_td').value.trim(),suhu:parseFloat(document.getElementById('sc_suhu').value)||null,nadi:parseInt(document.getElementById('sc_nadi').value)||null,respirasi:parseInt(document.getElementById('sc_respirasi').value)||null,gula_darah:parseInt(document.getElementById('sc_gula_darah').value)||null,mata:document.getElementById('sc_mata').value.trim(),telinga:document.getElementById('sc_telinga').value.trim(),gigi_mulut:document.getElementById('sc_gigi').value.trim(),kulit:document.getElementById('sc_kulit').value.trim(),catatan:document.getElementById('sc_catatan').value.trim(),petugas_id:u.id,petugas_nama:u.full_name});
     toast('Screening berhasil disimpan');
-    setTimeout(()=>View.go(u.role==='siswa'?'screening':'siswa-detail',{id:siswa_id}),500);
+    setTimeout(()=>{if(u.role==='siswa')View.go('riwayat');else View.go('siswa-detail',{id:siswa_id});},500);
   });
 }
 
@@ -1610,7 +1864,7 @@ function renderSiswaRawan(page){
   const kategoriCount={};Object.keys(RISK_CATEGORIES).forEach(k=>{kategoriCount[k]=all.filter(x=>x.risks.includes(k)).length;});
   page.innerHTML = `
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 slide-up">
-      <div><h2 class="text-3xl font-bold text-gray-800 flex items-center gap-3"><span class="w-11 h-11 rounded-xl bg-rose-100 flex items-center justify-center"><i class="fa-solid fa-user-injured text-rose-600 text-xl"></i></span>Siswa Rawan</h2><p class="text-gray-500 mt-1">Deteksi otomatis siswa berisiko (TA ${esc(DB.db.tahunAjaranAktif)})</p></div>
+      <div><h2 class="text-3xl font-bold text-gray-800 flex items-center gap-3"><span class="w-11 h-11 rounded-xl bg-rose-100 flex items-center justify-center"><i class="fa-solid fa-user-injured text-rose-600 text-xl"></i></span>Siswa Rawan</h2><p class="text-gray-500 mt-1">Deteksi otomatis siswa berisiko berdasarkan hasil screening (TA ${esc(DB.db.tahunAjaranAktif)}). Siswa yang belum screening tidak termasuk.</p></div>
       <div class="flex gap-2"><button onclick="exportSiswaRawan()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-lg shadow-amber-600/30"><i class="fa-solid fa-file-excel"></i> Export</button><button onclick="cetakSiswaRawan()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-lg shadow-emerald-600/30"><i class="fa-solid fa-print"></i> Cetak</button></div>
     </div>
     ${stats.total?`<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -2425,7 +2679,7 @@ window.addEventListener('storage',e=>{
   if(Session.user()&&!document.getElementById('modalContainer').innerHTML.trim())View.render();
 });
 
-// ==================== SUPABASE CLOUD (v3.0.0) ====================
+// ==================== SUPABASE CLOUD (v3.1.0) ====================
 // Anon key aman ditaruh di sini (memang publik) SELAMA RLS aktif. JANGAN pernah taruh service_role key di file ini.
 const SUPABASE_URL='https://sixukvhwlsrjkcuchlmj.supabase.co';
 const SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpeHVrdmh3bHNyamtjdWNobG1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNDE1MzYsImV4cCI6MjEwODcxNzUzNn0.lFiYdshcLm8a7TPe_eSLQO81wY0goKlgXqH3eoIL9eY';
@@ -2588,7 +2842,8 @@ const Cloud={
   applySiswa(x){
     this.role='siswa';const ta=x.ta||x.siswa.tahun_ajaran||'-';
     const scr=(x.screening||[]).map(r=>this.fromRow('screening',r));
-    DB.db=this.shape({siswa:[this.fromRow('siswa',x.siswa)],screening:scr,tahunAjaran:[ta],tahunAjaranAktif:ta,kelas:[]});
+    const fr=(k,a)=>(Array.isArray(a)?a:[]).map(r=>this.fromRow(k,r));   // v3.1.0: riwayat lengkap jika RPC siswa_login mengirimnya
+    DB.db=this.shape({siswa:[this.fromRow('siswa',x.siswa)],screening:scr,rekam:fr('rekam',x.rekam),kunjungan:fr('kunjungan',x.kunjungan),permintaanObat:fr('permintaanObat',x.permintaan_obat),obat:fr('obat',x.obat),tahunAjaran:[ta],tahunAjaranAktif:ta,kelas:[]});
     this.snap={screening:new Map(scr.map(r=>[r.id,'x']))};
   },
   async pushSiswa(){
@@ -2635,7 +2890,7 @@ async function cloudLogin(){
     if(!x.ok)return fail(x.error||'Username atau password salah');
     Cloud.cred={u:username,p:pwS};Cloud.applySiswa(x);
     Session.set({id:'S'+x.siswa.id,username:username.toLowerCase(),full_name:x.siswa.nama,role:'siswa',siswa_id:x.siswa.id});
-    toast('Selamat datang, '+x.siswa.nama);View.current='screening';View.render();
+    toast('Selamat datang, '+x.siswa.nama);View.current='dashboard';View.render();
   }catch(e){fail('Gagal terhubung ke server: '+e.message);}
 }
 
