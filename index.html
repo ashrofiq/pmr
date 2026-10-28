@@ -952,10 +952,6 @@ function renderShell(){
       <nav class="flex-1 p-2 space-y-0.5 overflow-y-auto">${nav}</nav>
       <div class="p-2 border-t border-gray-100">
         ${CLOUD_ON&&user.role!=='siswa'?`<button onclick="Cloud.refresh()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors text-left"><i class="fa-solid fa-rotate w-4 text-center text-sm"></i><span class="font-medium text-sm">Muat Ulang Data</span></button>`:''}
-        <button onclick="doLogout()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-rose-600 hover:bg-rose-50 transition-colors text-left">
-          <i class="fa-solid fa-right-from-bracket w-4 text-center text-sm"></i>
-          <span class="font-medium text-sm">Keluar</span>
-        </button>
         <p class="text-[10px] text-gray-400 text-center mt-2">© ${new Date().getFullYear()} ${esc(APP_NAME)} · v${APP_VERSION}</p>
       </div>
     </aside>
@@ -967,8 +963,14 @@ function renderShell(){
           <div class="w-7 h-7">${LOGO_ICON_SVG}</div>
           <span class="font-black text-gray-800 text-sm"><span class="text-emerald-700">UKS</span> SMANSAQ</span>
         </div>
-        ${kunjunganAktif?`<span class="text-xs font-bold px-2 py-1 rounded-full bg-blue-500 text-white">${kunjunganAktif}</span>`:'<div class="w-8"></div>'}
+        <div class="flex items-center gap-2">
+          ${kunjunganAktif?`<span class="text-xs font-bold px-2 py-1 rounded-full bg-blue-500 text-white">${kunjunganAktif}</span>`:''}
+          <button onclick="doLogout()" title="Keluar" class="p-2 rounded-lg text-rose-600 hover:bg-rose-50"><i class="fa-solid fa-right-from-bracket"></i></button>
+        </div>
       </header>
+      <div class="hidden lg:flex sticky top-0 z-20 justify-end px-8 pt-4 pointer-events-none">
+        <button onclick="doLogout()" class="pointer-events-auto flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-gray-200 shadow-sm text-rose-600 hover:bg-rose-50 transition-colors text-sm font-medium"><i class="fa-solid fa-right-from-bracket text-sm"></i>Keluar</button>
+      </div>
       <main id="page" class="flex-1 p-4 lg:p-8"></main>
     </div>
   </div>`;
