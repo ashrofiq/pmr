@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.2.5</title>
+<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.2.6</title>
 <meta name="application-name" content="UKS SMANSAQ">
-<meta name="app-version" content="3.2.5">
+<meta name="app-version" content="3.2.6">
 <meta name="description" content="Sistem Informasi UKS SMA Negeri 1 Klirong — rekam medis, screening, kunjungan, permintaan & stok obat.">
 <meta name="theme-color" content="#1e3a5f">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -40,10 +40,12 @@ body{font-family:'Inter',sans-serif}
 
 <script>
 /* ============================================================
-   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.2.5
+   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.2.6
    Single-file Application
    ============================================================ */
 
+// v3.2.6: tombol Keluar dipindah ke kanan atas; Daftar Screening dikategorikan Mandiri / Oleh Petugas (kolom, filter, export);
+//         submenu baru: Belum Screening Mandiri & Belum Screening oleh Petugas.
 // v3.2.5: halaman detail siswa untuk petugas: baris No. HP, Nama Ayah, No. HP Ayah, Nama Ibu, No. HP Ibu dihapus.
 // v3.2.4: tabel Data Siswa untuk petugas: kolom No HP, Nama Ayah, No HP Ayah, Nama Ibu, No HP Ibu dihapus.
 // v3.2.3: tombol Export di menu Data Siswa hanya untuk admin (petugas tidak melihat tombolnya).
@@ -57,7 +59,7 @@ body{font-family:'Inter',sans-serif}
 // ==================== APP META ====================
 const APP_NAME    = 'UKS SMANSAQ';
 const APP_SUBNAME = 'SMA Negeri 1 Klirong';
-const APP_VERSION = '3.2.5';
+const APP_VERSION = '3.2.6';
 
 // ==================== LOGO (SVG inline, menyerupai logo UKS SMANSAQ) ====================
 const LOGO_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Logo UKS SMANSAQ">'
@@ -536,7 +538,17 @@ function analisaSiswaRawan(){
 
 // ==================== v3.2.5: HELPER SCREENING ====================
 function getSiswaAktif(){const ta=DB.db.tahunAjaranAktif;return DB.db.siswa.filter(s=>!s.tahun_ajaran||s.tahun_ajaran===ta);}
+function getBelumScreeningBy(mode){
+  const aktif=getSiswaAktif();
+  if(mode==='mandiri'||mode==='petugas'){
+    const done=new Set(DB.db.screening.filter(x=>mode==='mandiri'?isScrMandiri(x):!isScrMandiri(x)).map(x=>x.siswa_id));
+    return aktif.filter(s=>!done.has(s.id));
+  }
+  return getBelumScreening();
+}
 function getBelumScreening(){const done=new Set(DB.db.screening.map(x=>x.siswa_id));return getSiswaAktif().filter(s=>!done.has(s.id));}
+function isScrMandiri(x){return String(x.petugas_id||'')==='S'+x.siswa_id;}
+function scrSumberBadge(x){return isScrMandiri(x)?'<span class="text-xs px-2 py-1 rounded-full bg-violet-100 text-violet-700 font-semibold whitespace-nowrap"><i class="fa-solid fa-user mr-1"></i>Mandiri</span>':'<span class="text-xs px-2 py-1 rounded-full bg-sky-100 text-sky-700 font-semibold whitespace-nowrap"><i class="fa-solid fa-user-nurse mr-1"></i>Petugas</span>';}
 function parseImtSafe(s){try{return s&&s.imt?JSON.parse(s.imt):null;}catch{return null;}}
 const INP_CLS='w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm bg-white';
 window.toggleNavGroup=id=>{
@@ -546,9 +558,9 @@ window.toggleNavGroup=id=>{
 
 // Tombol akses sub menu Screening (tersembunyi dari sidebar)
 function screeningTabs(active){
-  const belum=getBelumScreening().length;
-  const t=[['screening','Form Screening','fa-file-pen'],['screening-daftar','Daftar Screening','fa-list-check'],['screening-belum','Siswa Belum Screening','fa-user-clock']];
-  return `<div class="flex flex-wrap gap-2 mb-6 slide-up">${t.map(([id,l,ic])=>`<button onclick="View.go('${id}')" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${active===id?'bg-blue-600 text-white shadow-md shadow-blue-600/30':'bg-white border border-gray-200 text-gray-700 hover:bg-blue-50 hover:text-blue-700'}"><i class="fa-solid ${ic}"></i>${l}${id==='screening-belum'&&belum?`<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${active===id?'bg-white text-blue-700':'bg-amber-500 text-white'}">${belum}</span>`:''}</button>`).join('')}</div>`;
+  const cnt={'screening-belum':getBelumScreeningBy('all').length,'screening-belum-mandiri':getBelumScreeningBy('mandiri').length,'screening-belum-petugas':getBelumScreeningBy('petugas').length};
+  const t=[['screening','Form Screening','fa-file-pen'],['screening-daftar','Daftar Screening','fa-list-check'],['screening-belum','Siswa Belum Screening','fa-user-clock'],['screening-belum-mandiri','Belum Screening Mandiri','fa-user'],['screening-belum-petugas','Belum Screening oleh Petugas','fa-user-nurse']];
+  return `<div class="flex flex-wrap gap-2 mb-6 slide-up">${t.map(([id,l,ic])=>`<button onclick="View.go('${id}')" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${active===id?'bg-blue-600 text-white shadow-md shadow-blue-600/30':'bg-white border border-gray-200 text-gray-700 hover:bg-blue-50 hover:text-blue-700'}"><i class="fa-solid ${ic}"></i>${l}${cnt[id]?`<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${active===id?'bg-white text-blue-700':'bg-amber-500 text-white'}">${cnt[id]}</span>`:''}</button>`).join('')}</div>`;
 }
 
 // ==================== v3.2.5: DAFTAR SCREENING ====================
@@ -558,7 +570,7 @@ function renderScreeningDaftar(page){
   const LIMIT=200;let cur=[];
   page.innerHTML=`
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 slide-up">
-      <div><h2 class="text-3xl font-bold text-gray-800">Daftar Screening</h2><p class="text-gray-500 mt-1">Seluruh hasil screening siswa (TA ${esc(DB.db.tahunAjaranAktif)}) · ${all.length} data</p></div>
+      <div><h2 class="text-3xl font-bold text-gray-800">Daftar Screening</h2><p class="text-gray-500 mt-1">Seluruh hasil screening siswa (TA ${esc(DB.db.tahunAjaranAktif)}) · ${all.length} data · <span class="text-violet-600 font-semibold">${all.filter(isScrMandiri).length} mandiri</span> · <span class="text-sky-600 font-semibold">${all.filter(x=>!isScrMandiri(x)).length} oleh petugas</span></p></div>
       <div class="flex gap-2">
         <button onclick="exportScreeningDaftar()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-lg shadow-amber-600/30"><i class="fa-solid fa-file-excel"></i> Export</button>
         <button onclick="View.go('screening')" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-lg shadow-emerald-600/30"><i class="fa-solid fa-plus"></i> Screening Baru</button>
@@ -566,9 +578,10 @@ function renderScreeningDaftar(page){
     </div>
     ${screeningTabs('screening-daftar')}
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6 slide-up">
-      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <div class="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5"><i class="fa-solid fa-magnifying-glass text-gray-400"></i><input id="sdSearch" type="text" placeholder="Cari nama / NIS..." class="w-full bg-transparent outline-none text-sm"/></div>
         <select id="sdKelas" class="${INP_CLS}"><option value="">Semua Kelas</option>${kelasOptions('')}</select>
+        <select id="sdSumber" class="${INP_CLS}"><option value="">Semua Sumber</option><option value="mandiri">Screening Mandiri</option><option value="petugas">Oleh Petugas</option></select>
         <div><input id="sdDari" type="date" title="Dari tanggal" class="${INP_CLS}"/></div>
         <div><input id="sdSampai" type="date" title="Sampai tanggal" class="${INP_CLS}"/></div>
       </div>
@@ -576,7 +589,7 @@ function renderScreeningDaftar(page){
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden slide-up">
       <div class="p-4 border-b border-gray-100"><span id="sdCount" class="text-sm text-gray-500"></span></div>
       <div class="overflow-x-auto"><table class="w-full text-sm">
-        <thead class="bg-gray-50"><tr class="text-left text-xs text-gray-500 uppercase"><th class="px-4 py-3">Tanggal</th><th class="px-4 py-3">Siswa</th><th class="px-4 py-3">Kelas</th><th class="px-4 py-3">TB/BB</th><th class="px-4 py-3">IMT</th><th class="px-4 py-3">TD</th><th class="px-4 py-3">Suhu</th><th class="px-4 py-3">Gula</th><th class="px-4 py-3">Petugas</th><th class="px-4 py-3"></th></tr></thead>
+        <thead class="bg-gray-50"><tr class="text-left text-xs text-gray-500 uppercase"><th class="px-4 py-3">Tanggal</th><th class="px-4 py-3">Siswa</th><th class="px-4 py-3">Kelas</th><th class="px-4 py-3">TB/BB</th><th class="px-4 py-3">IMT</th><th class="px-4 py-3">TD</th><th class="px-4 py-3">Suhu</th><th class="px-4 py-3">Gula</th><th class="px-4 py-3">Sumber</th><th class="px-4 py-3">Petugas</th><th class="px-4 py-3"></th></tr></thead>
         <tbody id="sdBody" class="divide-y divide-gray-100"></tbody>
       </table></div>
     </div>`;
@@ -584,8 +597,10 @@ function renderScreeningDaftar(page){
     const q=document.getElementById('sdSearch').value.trim().toLowerCase();
     const kl=document.getElementById('sdKelas').value;
     const d1=document.getElementById('sdDari').value,d2=document.getElementById('sdSampai').value;
+    const sm=document.getElementById('sdSumber').value;
     cur=all.filter(x=>{
       const s=x._s;if(!s)return false;
+      if(sm==='mandiri'&&!isScrMandiri(x))return false;if(sm==='petugas'&&isScrMandiri(x))return false;
       if(kl&&normKelas(s.kelas)!==normKelas(kl))return false;
       const t=String(x.tanggal).slice(0,10);
       if(d1&&t<d1)return false;if(d2&&t>d2)return false;
@@ -605,40 +620,55 @@ function renderScreeningDaftar(page){
         <td class="px-4 py-3 whitespace-nowrap">${esc(x.tekanan_darah||'-')}</td>
         <td class="px-4 py-3 whitespace-nowrap">${x.suhu?x.suhu+'°C':'-'}</td>
         <td class="px-4 py-3 whitespace-nowrap">${x.gula_darah||'-'}</td>
-        <td class="px-4 py-3 text-xs text-gray-500">${esc(x.petugas_nama||'-')}</td>
+        <td class="px-4 py-3">${scrSumberBadge(x)}</td>
+        <td class="px-4 py-3 text-xs text-gray-500">${isScrMandiri(x)?'-':esc(x.petugas_nama||'-')}</td>
         <td class="px-4 py-3"><button onclick="View.go('siswa-detail',{id:${s.id}})" class="p-2 rounded-lg text-blue-600 hover:bg-blue-50" title="Lihat detail siswa"><i class="fa-solid fa-eye"></i></button></td>
-      </tr>`;}).join(''):`<tr><td colspan="10" class="text-center py-16 text-gray-400"><i class="fa-solid fa-stethoscope text-5xl mb-3 block text-gray-300"></i>Belum ada data screening</td></tr>`;
+      </tr>`;}).join(''):`<tr><td colspan="11" class="text-center py-16 text-gray-400"><i class="fa-solid fa-stethoscope text-5xl mb-3 block text-gray-300"></i>Belum ada data screening</td></tr>`;
   };
-  ['sdSearch','sdKelas','sdDari','sdSampai'].forEach(id=>{const el=document.getElementById(id);el.addEventListener('input',draw);el.addEventListener('change',draw);});
+  ['sdSearch','sdKelas','sdSumber','sdDari','sdSampai'].forEach(id=>{const el=document.getElementById(id);el.addEventListener('input',draw);el.addEventListener('change',draw);});
   window.exportScreeningDaftar=()=>{
     if(!cur.length)return toast('Tidak ada data untuk diexport','error');
-    exportExcel(cur.map(x=>({'Tanggal':String(x.tanggal).slice(0,10),'NIS':x._s.nis,'Nama':x._s.nama,'Kelas':x._s.kelas||'','TB (cm)':x.tinggi_badan||'','BB (kg)':x.berat_badan||'','IMT':x._imt?x._imt.imt:'','Status Gizi':x._imt?x._imt.status:'','Tekanan Darah':x.tekanan_darah||'','Suhu':x.suhu||'','Nadi':x.nadi||'','Respirasi':x.respirasi||'','Gula Darah':x.gula_darah||'','Mata':x.mata||'','Telinga':x.telinga||'','Gigi & Mulut':x.gigi_mulut||'','Kulit':x.kulit||'','Catatan':x.catatan||'','Petugas':x.petugas_nama||''})),'Daftar Screening',`Daftar_Screening_UKS_${todayISO()}.xlsx`);
+    exportExcel(cur.map(x=>({'Tanggal':String(x.tanggal).slice(0,10),'NIS':x._s.nis,'Nama':x._s.nama,'Kelas':x._s.kelas||'','TB (cm)':x.tinggi_badan||'','BB (kg)':x.berat_badan||'','IMT':x._imt?x._imt.imt:'','Status Gizi':x._imt?x._imt.status:'','Tekanan Darah':x.tekanan_darah||'','Suhu':x.suhu||'','Nadi':x.nadi||'','Respirasi':x.respirasi||'','Gula Darah':x.gula_darah||'','Mata':x.mata||'','Telinga':x.telinga||'','Gigi & Mulut':x.gigi_mulut||'','Kulit':x.kulit||'','Catatan':x.catatan||'','Sumber':isScrMandiri(x)?'Mandiri':'Oleh Petugas','Petugas':isScrMandiri(x)?'':(x.petugas_nama||'')})),'Daftar Screening',`Daftar_Screening_UKS_${todayISO()}.xlsx`);
   };
   draw();
 }
 
 // ==================== v3.2.5: SISWA BELUM SCREENING ====================
-function renderScreeningBelum(page){
+function renderScreeningBelum(page){renderScreeningBelumMode(page,'all');}
+function renderScreeningBelumMandiri(page){renderScreeningBelumMode(page,'mandiri');}
+function renderScreeningBelumPetugas(page){renderScreeningBelumMode(page,'petugas');}
+function renderScreeningBelumMode(page,mode){
+  const M={
+    all:{tab:'screening-belum',judul:'Siswa Belum Screening',ket:'Siswa yang belum memiliki data screening (TA ${TA}). Siswa ini belum dihitung sebagai siswa rawan (kecuali sering registrasi sebagai pasien).',sudah:'Sudah Screening',belum:'Belum Screening',kosong:'Semua siswa sudah screening 🎉',file:'Siswa_Belum_Screening',sheet:'Belum Screening',cetak:'Daftar Siswa Belum Screening'},
+    mandiri:{tab:'screening-belum-mandiri',judul:'Belum Screening Mandiri',ket:'Siswa yang belum pernah mengisi screening mandiri sendiri (TA ${TA}). Siswa yang sudah diperiksa petugas tetap tampil di sini bila belum mengisi mandiri.',sudah:'Sudah Screening Mandiri',belum:'Belum Screening Mandiri',kosong:'Semua siswa sudah screening mandiri 🎉',file:'Siswa_Belum_Screening_Mandiri',sheet:'Belum Screening Mandiri',cetak:'Daftar Siswa Belum Screening Mandiri'},
+    petugas:{tab:'screening-belum-petugas',judul:'Belum Screening oleh Petugas',ket:'Siswa yang belum pernah diperiksa (screening) oleh petugas (TA ${TA}). Siswa yang sudah screening mandiri tetap tampil di sini bila belum diperiksa petugas.',sudah:'Sudah Screening oleh Petugas',belum:'Belum Screening oleh Petugas',kosong:'Semua siswa sudah diperiksa petugas 🎉',file:'Siswa_Belum_Screening_Petugas',sheet:'Belum Screening Petugas',cetak:'Daftar Siswa Belum Screening oleh Petugas'}
+  }[mode];
   const aktif=getSiswaAktif();
-  const belum=getBelumScreening().sort((a,b)=>String(a.kelas||'').localeCompare(String(b.kelas||''),'id')||String(a.nama).localeCompare(String(b.nama),'id'));
-  const sudah=aktif.length-belum.length;const pct=aktif.length?Math.round(sudah/aktif.length*100):0;
+  const belum=getBelumScreeningBy(mode).sort((a,b)=>String(a.kelas||'').localeCompare(String(b.kelas||''),'id')||String(a.nama).localeCompare(String(b.nama),'id'));
+  const sudah=aktif.length-belum.length;
+  const _bySiswa={};DB.db.screening.forEach(x=>{(_bySiswa[x.siswa_id]=_bySiswa[x.siswa_id]||[]).push(x);});
+  const _aktifIds=new Set(aktif.map(s=>s.id));
+  let sudahMandiri=0,sudahPetugas=0;
+  Object.keys(_bySiswa).forEach(id=>{if(!_aktifIds.has(Number(id))&&!_aktifIds.has(id))return;const arr=_bySiswa[id];if(arr.some(x=>!isScrMandiri(x)))sudahPetugas++;else sudahMandiri++;});
+  const pct=aktif.length?Math.round(sudah/aktif.length*100):0;
   let cur=belum;
   page.innerHTML=`
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 slide-up">
-      <div><h2 class="text-3xl font-bold text-gray-800">Siswa Belum Screening</h2><p class="text-gray-500 mt-1">Siswa yang belum memiliki data screening (TA ${esc(DB.db.tahunAjaranAktif)}). Siswa ini belum dihitung sebagai siswa rawan (kecuali sering registrasi sebagai pasien).</p></div>
+      <div><h2 class="text-3xl font-bold text-gray-800">${M.judul}</h2><p class="text-gray-500 mt-1">${esc(M.ket.replace('${TA}',DB.db.tahunAjaranAktif))}</p></div>
       <div class="flex gap-2">
         <button onclick="exportBelumScreening()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-lg shadow-amber-600/30"><i class="fa-solid fa-file-excel"></i> Export</button>
         <button onclick="cetakBelumScreening()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-lg shadow-emerald-600/30"><i class="fa-solid fa-print"></i> Cetak</button>
       </div>
     </div>
-    ${screeningTabs('screening-belum')}
-    <div class="grid grid-cols-3 gap-4 mb-4 slide-up">
+    ${screeningTabs(M.tab)}
+    <div class="grid grid-cols-2 ${mode==='all'?'lg:grid-cols-5':'lg:grid-cols-3'} gap-4 mb-4 slide-up">
       ${card('Total Siswa',aktif.length,'fa-users','blue')}
-      ${card('Sudah Screening',sudah,'fa-circle-check','emerald')}
-      ${card('Belum Screening',belum.length,'fa-user-clock','amber')}
+      ${card(M.sudah,sudah,'fa-circle-check','emerald')}
+      ${mode==='all'?card('· Mandiri',sudahMandiri,'fa-user','purple')+card('· Oleh Petugas',sudahPetugas,'fa-user-nurse','sky'):''}
+      ${card(M.belum,belum.length,'fa-user-clock','amber')}
     </div>
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6 slide-up">
-      <div class="flex justify-between text-xs font-semibold text-gray-600 mb-2"><span>Progres screening</span><span>${pct}%</span></div>
+      <div class="flex justify-between text-xs font-semibold text-gray-600 mb-2"><span>Progres ${esc(M.sudah.toLowerCase())}</span><span>${pct}%</span></div>
       <div class="w-full h-3 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-emerald-500 rounded-full" style="width:${pct}%"></div></div>
     </div>
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden slide-up">
@@ -657,17 +687,17 @@ function renderScreeningBelum(page){
       <div class="w-11 h-11 rounded-full bg-amber-100 flex items-center justify-center shrink-0"><i class="fa-solid fa-user-clock text-amber-600"></i></div>
       <div class="flex-1 min-w-0"><button onclick="View.go('siswa-detail',{id:${s.id}})" class="font-bold text-gray-800 hover:text-blue-600 text-left">${esc(s.nama)}</button><p class="text-xs text-gray-500">${esc(s.nis)} · ${esc(s.kelas||'-')} · ${hitungUmur(s.tanggal_lahir)}</p></div>
       <button onclick="View.go('screening',{siswa_id:${s.id}})" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shrink-0"><i class="fa-solid fa-stethoscope"></i> Screening</button>
-    </div>`).join(''):`<div class="text-center py-16"><i class="fa-solid fa-circle-check text-5xl text-emerald-300 mb-3"></i><p class="text-gray-500 font-medium">${belum.length?'Tidak ada hasil':'Semua siswa sudah screening 🎉'}</p></div>`;
+    </div>`).join(''):`<div class="text-center py-16"><i class="fa-solid fa-circle-check text-5xl text-emerald-300 mb-3"></i><p class="text-gray-500 font-medium">${belum.length?'Tidak ada hasil':M.kosong}</p></div>`;
   };
   document.getElementById('sbSearch').addEventListener('input',draw);
   document.getElementById('sbKelas').addEventListener('change',draw);
   window.exportBelumScreening=()=>{
     if(!cur.length)return toast('Tidak ada data untuk diexport','error');
-    exportExcel(cur.map(s=>({'NIS':s.nis,'Nama':s.nama,'Kelas':s.kelas||'','Jenis Kelamin':s.jenis_kelamin==='L'?'Laki-laki':'Perempuan','Umur':hitungUmur(s.tanggal_lahir)})),'Belum Screening',`Siswa_Belum_Screening_${todayISO()}.xlsx`);
+    exportExcel(cur.map(s=>({'NIS':s.nis,'Nama':s.nama,'Kelas':s.kelas||'','Jenis Kelamin':s.jenis_kelamin==='L'?'Laki-laki':'Perempuan','Umur':hitungUmur(s.tanggal_lahir)})),M.sheet,`${M.file}_${todayISO()}.xlsx`);
   };
   window.cetakBelumScreening=()=>{
     if(!cur.length)return toast('Tidak ada data untuk dicetak','error');
-    printReport({title:'Daftar Siswa Belum Screening',subtitle:APP_SUBNAME,meta:`TA ${DB.db.tahunAjaranAktif} · Belum screening: ${cur.length} dari ${aktif.length} siswa`,headers:['No','NIS','Nama','Kelas','L/P','Umur'],rows:cur.map((s,i)=>[i+1,s.nis,s.nama,s.kelas||'-',s.jenis_kelamin||'-',hitungUmur(s.tanggal_lahir)])});
+    printReport({title:M.cetak,subtitle:APP_SUBNAME,meta:`TA ${DB.db.tahunAjaranAktif} · ${M.belum}: ${cur.length} dari ${aktif.length} siswa`,headers:['No','NIS','Nama','Kelas','L/P','Umur'],rows:cur.map((s,i)=>[i+1,s.nis,s.nama,s.kelas||'-',s.jenis_kelamin||'-',hitungUmur(s.tanggal_lahir)])});
   };
   draw();
 }
@@ -799,7 +829,7 @@ const View = {
   render(){
     const user=Session.user();
     if(!user){this.current='login';document.getElementById('modalContainer').innerHTML='';renderLogin();return;}
-    const allowed=['dashboard','siswa','siswa-detail','screening','screening-daftar','screening-belum','riwayat','permintaan','kunjungan','rawan','laporan','setting','obat'];
+    const allowed=['dashboard','siswa','siswa-detail','screening','screening-daftar','screening-belum','screening-belum-mandiri','screening-belum-petugas','riwayat','permintaan','kunjungan','rawan','laporan','setting','obat'];
     if(!allowed.includes(this.current))this.current='dashboard';
     if(this.current==='setting'&&user.role!=='admin')this.current='dashboard';
     if(user.role==='siswa'){if(!['dashboard','screening','riwayat'].includes(this.current))this.current='dashboard';}
@@ -926,7 +956,7 @@ function renderShell(){
         </div>
       </div>`;
     }
-    const active = View.current===m.id || (m.id==='siswa'&&View.current==='siswa-detail') || (m.id==='screening'&&user.role!=='siswa'&&['screening-daftar','screening-belum'].includes(View.current));
+    const active = View.current===m.id || (m.id==='siswa'&&View.current==='siswa-detail') || (m.id==='screening'&&user.role!=='siswa'&&['screening-daftar','screening-belum','screening-belum-mandiri','screening-belum-petugas'].includes(View.current));
     return `<button onclick="View.go('${m.id}')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left ${active?'bg-blue-600 text-white shadow-md shadow-blue-600/30':'text-gray-600 hover:bg-blue-50 hover:text-blue-700'}">
       <i class="fa-solid ${m.icon} w-4 text-center text-sm"></i><span class="font-medium text-sm">${m.label}</span>${badgeOf(m)}</button>`;
   }).join('');
@@ -978,7 +1008,7 @@ function renderShell(){
   const page = document.getElementById('page');
   const renderers = {
     dashboard:(p)=>user.role==='siswa'?renderDashboardSiswa(p):renderDashboard(p), siswa:renderSiswa, rawan:renderSiswaRawan,
-    'screening-daftar':renderScreeningDaftar, 'screening-belum':renderScreeningBelum, riwayat:renderRiwayatSiswa,
+    'screening-daftar':renderScreeningDaftar, 'screening-belum':renderScreeningBelum, 'screening-belum-mandiri':renderScreeningBelumMandiri, 'screening-belum-petugas':renderScreeningBelumPetugas, riwayat:renderRiwayatSiswa,
     screening:renderScreening, kunjungan:renderKunjungan, permintaan:renderPermintaan,
     obat:renderStokObat, laporan:renderLaporan, setting:renderSetting
   };
