@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.1.1</title>
+<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.1.2</title>
 <meta name="application-name" content="UKS SMANSAQ">
-<meta name="app-version" content="3.1.1">
+<meta name="app-version" content="3.1.2">
 <meta name="description" content="Sistem Informasi UKS SMA Negeri 1 Klirong — rekam medis, screening, kunjungan, permintaan & stok obat.">
 <meta name="theme-color" content="#1e3a5f">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -40,17 +40,18 @@ body{font-family:'Inter',sans-serif}
 
 <script>
 /* ============================================================
-   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.1.1
+   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.1.2
    Single-file Application
    ============================================================ */
 
+// v3.1.2: petugas dapat mengakses Stok Obat (hapus obat tetap khusus admin).
 // v3.1.1: submenu Screening tidak di sidebar; diakses lewat tombol di halaman Screening.
 // v3.1.0: siswa belum screening tidak masuk Siswa Rawan; submenu Screening (Form, Daftar, Belum Screening);
 //         area siswa: Dashboard, Screening Mandiri, Riwayat Kesehatan.
 // ==================== APP META ====================
 const APP_NAME    = 'UKS SMANSAQ';
 const APP_SUBNAME = 'SMA Negeri 1 Klirong';
-const APP_VERSION = '3.1.1';
+const APP_VERSION = '3.1.2';
 
 // ==================== LOGO (SVG inline, menyerupai logo UKS SMANSAQ) ====================
 const LOGO_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Logo UKS SMANSAQ">'
@@ -485,7 +486,7 @@ function analisaSiswaRawan(){
     if(s.riwayat_penyakit&&s.riwayat_penyakit.trim()){risks.push('riwayat');details.riwayat=s.riwayat_penyakit.trim();}
     const scr=DB.db.screening.filter(x=>x.siswa_id===s.id).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
     const last=scr[0];
-    if(!last)return null;   // v3.1.1: siswa yang belum screening tidak dimasukkan ke siswa rawan
+    if(!last)return null;   // v3.1.2: siswa yang belum screening tidak dimasukkan ke siswa rawan
     if(last){
       if(last.imt){try{const imt=JSON.parse(last.imt);
         if(imt.status==='Kurus'){risks.push('gizi_kurang');details.gizi_kurang=`IMT ${imt.imt}`;}
@@ -510,7 +511,7 @@ function analisaSiswaRawan(){
   }).filter(x=>x&&x.risks.length>0);
 }
 
-// ==================== v3.1.1: HELPER SCREENING ====================
+// ==================== v3.1.2: HELPER SCREENING ====================
 function getSiswaAktif(){const ta=DB.db.tahunAjaranAktif;return DB.db.siswa.filter(s=>!s.tahun_ajaran||s.tahun_ajaran===ta);}
 function getBelumScreening(){const done=new Set(DB.db.screening.map(x=>x.siswa_id));return getSiswaAktif().filter(s=>!done.has(s.id));}
 function parseImtSafe(s){try{return s&&s.imt?JSON.parse(s.imt):null;}catch{return null;}}
@@ -527,7 +528,7 @@ function screeningTabs(active){
   return `<div class="flex flex-wrap gap-2 mb-6 slide-up">${t.map(([id,l,ic])=>`<button onclick="View.go('${id}')" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${active===id?'bg-blue-600 text-white shadow-md shadow-blue-600/30':'bg-white border border-gray-200 text-gray-700 hover:bg-blue-50 hover:text-blue-700'}"><i class="fa-solid ${ic}"></i>${l}${id==='screening-belum'&&belum?`<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${active===id?'bg-white text-blue-700':'bg-amber-500 text-white'}">${belum}</span>`:''}</button>`).join('')}</div>`;
 }
 
-// ==================== v3.1.1: DAFTAR SCREENING ====================
+// ==================== v3.1.2: DAFTAR SCREENING ====================
 function renderScreeningDaftar(page){
   const aktifIds=new Set(getSiswaAktif().map(s=>s.id));
   const all=DB.db.screening.filter(x=>aktifIds.has(x.siswa_id)).map(x=>({...x,_s:DB.find('siswa',x.siswa_id),_imt:parseImtSafe(x)})).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
@@ -593,7 +594,7 @@ function renderScreeningDaftar(page){
   draw();
 }
 
-// ==================== v3.1.1: SISWA BELUM SCREENING ====================
+// ==================== v3.1.2: SISWA BELUM SCREENING ====================
 function renderScreeningBelum(page){
   const aktif=getSiswaAktif();
   const belum=getBelumScreening().sort((a,b)=>String(a.kelas||'').localeCompare(String(b.kelas||''),'id')||String(a.nama).localeCompare(String(b.nama),'id'));
@@ -648,7 +649,7 @@ function renderScreeningBelum(page){
   draw();
 }
 
-// ==================== v3.1.1: AREA SISWA (Dashboard & Riwayat Kesehatan) ====================
+// ==================== v3.1.2: AREA SISWA (Dashboard & Riwayat Kesehatan) ====================
 const RIWAYAT_META={
   screening:{label:'Screening',color:'emerald',icon:'fa-stethoscope'},
   kunjungan:{label:'Kunjungan UKS',color:'indigo',icon:'fa-clipboard-user'},
@@ -778,7 +779,6 @@ const View = {
     const allowed=['dashboard','siswa','siswa-detail','screening','screening-daftar','screening-belum','riwayat','permintaan','kunjungan','rawan','laporan','setting','obat'];
     if(!allowed.includes(this.current))this.current='dashboard';
     if(this.current==='setting'&&user.role!=='admin')this.current='dashboard';
-    if(this.current==='obat'&&user.role!=='admin')this.current='dashboard';
     if(user.role==='siswa'){if(!['dashboard','screening','riwayat'].includes(this.current))this.current='dashboard';}
     else if(this.current==='riwayat')this.current='dashboard';
     renderShell();
@@ -886,7 +886,7 @@ function renderShell(){
     { id:'kunjungan', icon:'fa-clipboard-user',label:'Registrasi Pasien',roles:['admin','petugas'], badge: kunjunganAktif, badgeColor:'blue' },
     { id:'rawan',     icon:'fa-user-injured',label:'Siswa Rawan',       roles:['admin','petugas'], badge: rawanCount, badgeColor:'rose' },
     { id:'laporan',   icon:'fa-file-lines',  label:'Laporan',           roles:['admin','petugas'] },
-    { id:'obat',      icon:'fa-prescription-bottle-medical', label:'Stok Obat', roles:['admin'], badge: stokRendah, badgeColor:'rose' },
+    { id:'obat',      icon:'fa-prescription-bottle-medical', label:'Stok Obat', roles:['admin','petugas'], badge: stokRendah, badgeColor:'rose' },
     { id:'setting',   icon:'fa-gear',        label:'Setting',           roles:['admin'] },
   ];
 
@@ -1009,7 +1009,7 @@ function renderDashboard(page){
         <div class="space-y-2">${recentScreening.length?recentScreening.map(s=>{const sw=DB.find('siswa',s.siswa_id);const imt=s.imt?JSON.parse(s.imt):null;return `<button onclick="View.go('siswa-detail',{id:${s.siswa_id}})" class="w-full text-left flex items-center justify-between p-3 rounded-xl hover:bg-gray-50"><div class="min-w-0"><p class="font-semibold text-gray-800 text-sm truncate">${esc(sw?.nama||'-')}</p><p class="text-xs text-gray-500">${fmtDate(s.tanggal)}${imt?' · IMT: '+imt.imt:''}</p></div><i class="fa-solid fa-chevron-right text-gray-400 shrink-0"></i></button>`;}).join(''):'<p class="text-center py-6 text-gray-400 text-sm">Belum ada data screening</p>'}</div>
       </div>
     </div>
-    ${stokRendah.length?`<div class="bg-amber-50 border border-amber-200 rounded-2xl p-5 slide-up"><div class="flex items-start gap-3"><div class="w-11 h-11 rounded-full bg-amber-100 flex items-center justify-center shrink-0"><i class="fa-solid fa-triangle-exclamation text-amber-600 text-lg"></i></div><div class="flex-1"><p class="font-bold text-amber-800">⚠ ${stokRendah.length} Obat Stok Rendah</p><p class="text-xs text-amber-700 mt-1">${stokRendah.map(o=>`${o.nama} (${o.stok} ${o.satuan})`).join(' · ')}</p>${user.role==='admin'?`<button onclick="View.go('obat')" class="mt-2 text-xs font-semibold text-amber-700 hover:underline">Kelola stok obat →</button>`:''}</div></div></div>`:''}
+    ${stokRendah.length?`<div class="bg-amber-50 border border-amber-200 rounded-2xl p-5 slide-up"><div class="flex items-start gap-3"><div class="w-11 h-11 rounded-full bg-amber-100 flex items-center justify-center shrink-0"><i class="fa-solid fa-triangle-exclamation text-amber-600 text-lg"></i></div><div class="flex-1"><p class="font-bold text-amber-800">⚠ ${stokRendah.length} Obat Stok Rendah</p><p class="text-xs text-amber-700 mt-1">${stokRendah.map(o=>`${o.nama} (${o.stok} ${o.satuan})`).join(' · ')}</p>${user.role!=='siswa'?`<button onclick="View.go('obat')" class="mt-2 text-xs font-semibold text-amber-700 hover:underline">Kelola stok obat →</button>`:''}</div></div></div>`:''}
   `;
 }
 function card(label,value,icon,color){
@@ -1759,7 +1759,7 @@ window.exportKunjungan = () => {
 // ==================== STOK OBAT ====================
 function renderStokObat(page){
   const user=Session.user();
-  if(user.role!=='admin'){page.innerHTML=`<div class="text-center py-20"><i class="fa-solid fa-lock text-5xl text-gray-300 mb-3"></i><p class="text-gray-500">Akses khusus admin</p></div>`;return;}
+  if(user.role!=='admin'&&user.role!=='petugas'){page.innerHTML=`<div class="text-center py-20"><i class="fa-solid fa-lock text-5xl text-gray-300 mb-3"></i><p class="text-gray-500">Akses khusus staf UKS</p></div>`;return;}
   const all=DB.db.obat;
   const stats={total:all.length,stokRendah:all.filter(o=>o.stok<=o.stok_min).length,stokHabis:all.filter(o=>o.stok===0).length,totalItem:all.reduce((s,o)=>s+o.stok,0)};
   page.innerHTML = `
@@ -1797,7 +1797,7 @@ function renderStokObat(page){
         <td class="px-6 py-4 text-right whitespace-nowrap">
           <button onclick="tambahStok(${o.id})" class="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50" title="Tambah Stok"><i class="fa-solid fa-plus-circle"></i></button>
           <button onclick="openObatForm(${o.id})" class="p-2 rounded-lg text-blue-600 hover:bg-blue-50" title="Edit"><i class="fa-solid fa-pen"></i></button>
-          <button onclick="hapusObat(${o.id})" class="p-2 rounded-lg text-rose-600 hover:bg-rose-50" title="Hapus"><i class="fa-solid fa-trash"></i></button>
+          ${user.role==='admin'?`<button onclick="hapusObat(${o.id})" class="p-2 rounded-lg text-rose-600 hover:bg-rose-50" title="Hapus"><i class="fa-solid fa-trash"></i></button>`:''}
         </td>
       </tr>`;
     }).join('');
@@ -1807,7 +1807,7 @@ function renderStokObat(page){
 }
 
 window.openObatForm = (id=null) => {
-  if(Session.user().role!=='admin')return toast('Hanya admin','error');
+  if(!['admin','petugas'].includes(Session.user()?.role))return toast('Akses ditolak','error');
   const o=id?DB.find('obat',id):null;
   document.getElementById('modalContainer').innerHTML = `
     <div class="fixed inset-0 z-[80] bg-black/50 flex items-center justify-center p-4 overflow-y-auto slide-up">
@@ -1834,7 +1834,7 @@ window.openObatForm = (id=null) => {
   });
 };
 window.tambahStok = id => {
-  if(Session.user().role!=='admin')return toast('Hanya admin','error');
+  if(!['admin','petugas'].includes(Session.user()?.role))return toast('Akses ditolak','error');
   const o=DB.find('obat',id);if(!o)return;
   document.getElementById('modalContainer').innerHTML = `
     <div class="fixed inset-0 z-[80] bg-black/50 flex items-center justify-center p-4 slide-up">
@@ -2686,7 +2686,7 @@ window.addEventListener('storage',e=>{
   if(Session.user()&&!document.getElementById('modalContainer').innerHTML.trim())View.render();
 });
 
-// ==================== SUPABASE CLOUD (v3.1.1) ====================
+// ==================== SUPABASE CLOUD (v3.1.2) ====================
 // Anon key aman ditaruh di sini (memang publik) SELAMA RLS aktif. JANGAN pernah taruh service_role key di file ini.
 const SUPABASE_URL='https://sixukvhwlsrjkcuchlmj.supabase.co';
 const SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpeHVrdmh3bHNyamtjdWNobG1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNDE1MzYsImV4cCI6MjEwODcxNzUzNn0.lFiYdshcLm8a7TPe_eSLQO81wY0goKlgXqH3eoIL9eY';
@@ -2849,7 +2849,7 @@ const Cloud={
   applySiswa(x){
     this.role='siswa';const ta=x.ta||x.siswa.tahun_ajaran||'-';
     const scr=(x.screening||[]).map(r=>this.fromRow('screening',r));
-    const fr=(k,a)=>(Array.isArray(a)?a:[]).map(r=>this.fromRow(k,r));   // v3.1.1: riwayat lengkap jika RPC siswa_login mengirimnya
+    const fr=(k,a)=>(Array.isArray(a)?a:[]).map(r=>this.fromRow(k,r));   // v3.1.2: riwayat lengkap jika RPC siswa_login mengirimnya
     DB.db=this.shape({siswa:[this.fromRow('siswa',x.siswa)],screening:scr,rekam:fr('rekam',x.rekam),kunjungan:fr('kunjungan',x.kunjungan),permintaanObat:fr('permintaanObat',x.permintaan_obat),obat:fr('obat',x.obat),tahunAjaran:[ta],tahunAjaranAktif:ta,kelas:[]});
     this.snap={screening:new Map(scr.map(r=>[r.id,'x']))};
   },
