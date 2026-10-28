@@ -203,8 +203,8 @@ const DB = {
     let db = this.read();
     const defaultTA = '2025/2026';
     const seedUsers = () => [
-      { id:1, username:'admin', ...pwFields('admin123'), must_change:true, full_name:'Administrator UKS', role:'admin', is_active:1, created_at:new Date().toISOString() },
-      { id:2, username:'petugas', ...pwFields('petugas123'), must_change:true, full_name:'Petugas UKS', role:'petugas', is_active:1, created_at:new Date().toISOString() }
+      { id:1, username:'admin', ...pwFields('admin123'), must_change:false, full_name:'Administrator UKS', role:'admin', is_active:1, created_at:new Date().toISOString() },
+      { id:2, username:'petugas', ...pwFields('petugas123'), must_change:false, full_name:'Petugas UKS', role:'petugas', is_active:1, created_at:new Date().toISOString() }
     ];
     if(!db){
       db = {
@@ -228,7 +228,6 @@ const DB = {
       (db.users||[]).forEach(u=>{
         if(u.password!==undefined&&!u.password_hash){
           const pw=String(u.password);Object.assign(u,pwFields(pw));
-          if(DEFAULT_PWS.includes(pw))u.must_change=true;
         }
         if('password' in u){delete u.password;c=true;}
       });
@@ -242,6 +241,7 @@ const DB = {
       if(!db.pembagianKelas||typeof db.pembagianKelas!=='object'){db.pembagianKelas={};c=true;}
       (db.siswa||[]).forEach(s=>{if(!s.tahun_ajaran){s.tahun_ajaran=db.tahunAjaranAktif;c=true;}});
       if(normalizeKelasDb(db))c=true;
+      (db.users||[]).forEach(u=>{if(u.must_change){u.must_change=false;c=true;}});
       const d={nextUserId:3,nextSiswaId:1,nextRekamId:1,nextScreeningId:1,nextKunjunganId:1,nextObatId:SEED_OBAT.length+1,nextPermintaanObatId:1};
       Object.keys(d).forEach(k=>{if(!db.meta[k]){db.meta[k]=d[k];c=true;}});
       if(c) this.write(db);
@@ -536,8 +536,6 @@ const View = {
     if(this.current==='obat'&&user.role!=='admin')this.current='dashboard';
     if(user.role==='siswa')this.current='screening';
     renderShell();
-    const du=DB.db.users.find(x=>x.id===user.id);
-    if(du&&du.must_change&&!document.getElementById('forceChg'))forceChangePassword();
   },
   go(page,params={}){this.current=page;this.params=params;window.scrollTo(0,0);this.render();}
 };
@@ -2309,8 +2307,8 @@ function renderSetting(page){
                 <td class="px-6 py-4"><span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${u.role==='admin'?'bg-purple-100 text-purple-700':'bg-emerald-100 text-emerald-700'}"><i class="fa-solid ${u.role==='admin'?'fa-user-tie':'fa-user-nurse'}"></i>${u.role==='admin'?'Admin':'Petugas'}</span></td>
                 <td class="px-6 py-4 text-sm">${u_isActive(u)?'<span class="text-emerald-600 font-semibold">● Aktif</span>':'<span class="text-gray-400 font-semibold">● Nonaktif</span>'}</td>
                 <td class="px-6 py-4 text-right whitespace-nowrap">
-                  <button onclick="openUserForm(${u.id})" class="p-2 rounded-lg text-blue-600 hover:bg-blue-50" title="Edit"><i class="fa-solid fa-pen"></i></button>
-                  ${u.id!==user.id?`<button onclick="toggleUserActive(${u.id})" class="p-2 rounded-lg text-amber-600 hover:bg-amber-50" title="Aktif/Nonaktif"><i class="fa-solid ${u_isActive(u)?'fa-toggle-on':'fa-toggle-off'}"></i></button><button onclick="hapusUser(${u.id})" class="p-2 rounded-lg text-rose-600 hover:bg-rose-50" title="Hapus"><i class="fa-solid fa-trash"></i></button>`:''}
+                  <button onclick="openUserForm(${esc(JSON.stringify(u.id))})" class="p-2 rounded-lg text-blue-600 hover:bg-blue-50" title="Edit"><i class="fa-solid fa-pen"></i></button>
+                  ${u.id!==user.id?`<button onclick="toggleUserActive(${esc(JSON.stringify(u.id))})" class="p-2 rounded-lg text-amber-600 hover:bg-amber-50" title="Aktif/Nonaktif"><i class="fa-solid ${u_isActive(u)?'fa-toggle-on':'fa-toggle-off'}"></i></button><button onclick="hapusUser(${esc(JSON.stringify(u.id))})" class="p-2 rounded-lg text-rose-600 hover:bg-rose-50" title="Hapus"><i class="fa-solid fa-trash"></i></button>`:''}
                 </td>
               </tr>
             `).join('')}
@@ -2371,16 +2369,18 @@ window.openUserForm = (id=null) => {
     const username=document.getElementById('u_username').value.trim();
     const password=document.getElementById('u_password').value;
     const role=document.getElementById('u_role').value;
-    const dup=DB.db.users.find(x=>x.username===username&&x.id!==id);
+    const dup=DB.db.users.find(x=>String(x.username).toLowerCase()===username.toLowerCase()&&x.id!==id);
     if(dup){toast('Username sudah digunakan','error');return;}
-    if(id){const d={full_name,username,role};if(password){if(password.length<6){toast('Password minimal 6 karakter','error');return;}Object.assign(d,pwFields(password));d.must_change=(id!==Session.user().id);}DB.update('users',id,d);toast('User diperbarui');}
-    else{if(password.length<6){toast('Password minimal 6 karakter','error');return;}DB.insert('users',{full_name,username,...pwFields(password),must_change:true,role,is_active:1});toast('User ditambahkan');}
+    if(CLOUD_ON){Cloud.saveUser(id,{full_name,username,password,role});return;}
+    if(id){const d={full_name,username,role};if(password){if(password.length<6){toast('Password minimal 6 karakter','error');return;}Object.assign(d,pwFields(password));d.must_change=false;}DB.update('users',id,d);toast('User diperbarui');}
+    else{if(password.length<6){toast('Password minimal 6 karakter','error');return;}DB.insert('users',{full_name,username,...pwFields(password),must_change:false,role,is_active:1});toast('User ditambahkan');}
     closeModal();View.render();
   });
 };
 window.toggleUserActive = id => {
   if(Session.user().role!=='admin')return toast('Hanya admin','error');
   const u=DB.find('users',id);if(!u)return;
+  if(CLOUD_ON){Cloud.setUserActive(id,!u_isActive(u));return;}
   DB.update('users',id,{is_active:u_isActive(u)?0:1});
   toast(u_isActive(u)?'Dinonaktifkan':'Diaktifkan','info');View.render();
 };
@@ -2388,31 +2388,11 @@ window.hapusUser = async id => {
   if(Session.user().role!=='admin')return toast('Hanya admin','error');
   const u=DB.find('users',id);if(!u)return;
   if(!await confirmDialog(`Hapus user "${u.full_name}"?`))return;
+  if(CLOUD_ON){Cloud.deleteUser(id);return;}
   DB.delete('users',id);toast('User dihapus');View.render();
 };
 
 
-// ==================== GANTI PASSWORD PAKSA ====================
-function forceChangePassword(){
-  document.getElementById('modalContainer').innerHTML=`
-    <div id="forceChg" class="fixed inset-0 z-[95] bg-black/60 flex items-center justify-center p-4">
-      <form id="forceChgForm" class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4">
-        <div><h3 class="font-bold text-gray-800 text-lg">Ganti Password</h3><p class="text-xs text-gray-500 mt-1">Demi keamanan data kesehatan siswa, password awal/reset harus diganti sebelum melanjutkan.</p></div>
-        <input id="fc_pw1" type="password" required minlength="6" placeholder="Password baru (min. 6 karakter)" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm"/>
-        <input id="fc_pw2" type="password" required minlength="6" placeholder="Ulangi password baru" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm"/>
-        <div class="flex gap-3 justify-end"><button type="button" onclick="Session.clear();View.render()" class="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium">Keluar</button><button type="submit" class="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold">Simpan</button></div>
-      </form></div>`;
-  document.getElementById('forceChgForm').addEventListener('submit',e=>{
-    e.preventDefault();
-    const a=document.getElementById('fc_pw1').value,b=document.getElementById('fc_pw2').value;
-    if(a!==b)return toast('Konfirmasi password tidak sama','error');
-    if(a.length<6)return toast('Minimal 6 karakter','error');
-    if(DEFAULT_PWS.includes(a))return toast('Jangan pakai password bawaan','error');
-    DB.update('users',Session.user().id,{...pwFields(a),must_change:false});
-    document.getElementById('modalContainer').innerHTML='';
-    toast('Password berhasil diganti');View.render();
-  });
-}
 
 // ==================== BACKUP / RESTORE ====================
 window.backupData=()=>{
@@ -2576,6 +2556,34 @@ const Cloud={
       snapNow.forEach(([k,js])=>this.setSnap[k]=js);
     }
   },
+  // ---- Kelola user staf (fungsi SQL khusus admin: uks_create_user, uks_update_user, uks_set_user_active, uks_delete_user) ----
+  async reloadUsers(){
+    DB.db.users=(await this.req('GET','/rest/v1/profiles?select=*&order=full_name')).map(x=>({id:x.id,username:x.username,full_name:x.full_name,role:x.role,is_active:x.is_active}));
+  },
+  async saveUser(id,d){
+    try{
+      const uname=d.username.trim().toLowerCase();
+      if(!/^[a-z0-9._-]{3,30}$/.test(uname))return toast('Username 3-30 karakter: huruf kecil, angka, titik, strip, underscore (tanpa spasi)','error');
+      if(d.password&&d.password.length<6)return toast('Password minimal 6 karakter','error');
+      if(!id&&!d.password)return toast('Password wajib diisi','error');
+      if(id){
+        await this.req('POST','/rest/v1/rpc/uks_update_user',{p_id:id,p_full_name:d.full_name,p_username:uname,p_role:d.role,p_password:d.password||null});
+        toast('User diperbarui');
+      }else{
+        await this.req('POST','/rest/v1/rpc/uks_create_user',{p_username:uname,p_full_name:d.full_name,p_password:d.password,p_role:d.role});
+        toast('User ditambahkan. Login: '+uname);
+      }
+      await this.reloadUsers();closeModal();View.render();
+    }catch(e){toast('Gagal menyimpan user: '+e.message,'error');}
+  },
+  async setUserActive(id,aktif){
+    try{await this.req('POST','/rest/v1/rpc/uks_set_user_active',{p_id:id,p_active:aktif});await this.reloadUsers();toast(aktif?'Diaktifkan':'Dinonaktifkan','info');View.render();}
+    catch(e){toast('Gagal: '+e.message,'error');}
+  },
+  async deleteUser(id){
+    try{await this.req('POST','/rest/v1/rpc/uks_delete_user',{p_id:id});await this.reloadUsers();toast('User dihapus');View.render();}
+    catch(e){toast('Gagal menghapus: '+e.message,'error');}
+  },
   async siswaLogin(u,p){return (await this.req('POST','/rest/v1/rpc/siswa_login',{p_user:u,p_pass:p}))||{ok:false,error:'Respon kosong'};},
   applySiswa(x){
     this.role='siswa';const ta=x.ta||x.siswa.tahun_ajaran||'-';
@@ -2636,8 +2644,6 @@ if(CLOUD_ON){
   DB.read=()=>null;                                  // data tidak disimpan di browser
   DB.write=function(){Cloud.schedule();return true;}; // setiap perubahan disinkronkan ke Supabase
   DB.insert=function(t,data){const row={id:Cloud.newId(),created_at:new Date().toISOString(),...data};this.db[t].push(row);this.save();return row;};
-  const noUser=()=>toast('Akun staff dikelola di dashboard Supabase (Authentication + tabel profiles).','info');
-  ['openUserForm','toggleUserActive','hapusUser'].forEach(n=>{window[n]=noUser;});
   window.restoreData=file=>{
     if(Session.user()?.role!=='admin')return toast('Hanya admin','error');
     if(!file)return;
