@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.2.7</title>
+<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.3.2</title>
 <meta name="application-name" content="UKS SMANSAQ">
-<meta name="app-version" content="3.2.7">
+<meta name="app-version" content="3.3.2">
 <meta name="description" content="Sistem Informasi UKS SMA Negeri 1 Klirong — rekam medis, screening, kunjungan, permintaan & stok obat.">
 <meta name="theme-color" content="#1e3a5f">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -40,10 +40,18 @@ body{font-family:'Inter',sans-serif}
 
 <script>
 /* ============================================================
-   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.2.7
+   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.3.2
    Single-file Application
    ============================================================ */
 
+// v3.3.2: Tambah Petugas dari Siswa: admin dapat memilih banyak siswa sekaligus lewat ceklist di depan nama siswa
+//         (ada Pilih Semua, filter kelas, penanda siswa yang sudah punya akun, jabatan Petugas UKS / Supervisor berlaku untuk semua yang dipilih).
+// v3.3.1: role Ketua & Wakil Ketua digabung menjadi satu: Supervisor (akun lama ketua/wakil tetap berfungsi sebagai supervisor);
+//         nama petugas ditampilkan di form dan data Screening, Registrasi Pasien, Permintaan Obat (detail siswa, laporan, cetak riwayat).
+// v3.3.0: Tambah Petugas dari Siswa tanpa isi username/password (username = nama depan, password = tanggal lahir; akun siswa & petugas satu akun,
+//         ada tombol pindah Akses Siswa / Akses Petugas); Stok Obat dicabut dari petugas; role baru Ketua & Wakil Ketua (= petugas + Stok Obat).
+// v3.2.9: Setting > Kelola User: tombol "Tambah Petugas dari Siswa" (pilih dari daftar siswa, password = tanggal lahir siswa); "Jadikan Petugas" di Data Siswa memakai alur yang sama.
+// v3.2.8: admin dapat menambah petugas langsung dari Data Siswa (tombol Jadikan Petugas); petugas punya menu Ubah Password.
 // v3.2.7: tombol/submenu "Siswa Belum Screening" dihapus dari menu Screening.
 // v3.2.6: tombol Keluar dipindah ke kanan atas; Daftar Screening dikategorikan Mandiri / Oleh Petugas (kolom, filter, export);
 //         submenu baru: Belum Screening Mandiri & Belum Screening oleh Petugas.
@@ -60,7 +68,7 @@ body{font-family:'Inter',sans-serif}
 // ==================== APP META ====================
 const APP_NAME    = 'UKS SMANSAQ';
 const APP_SUBNAME = 'SMA Negeri 1 Klirong';
-const APP_VERSION = '3.2.7';
+const APP_VERSION = '3.3.2';
 
 // ==================== LOGO (SVG inline, menyerupai logo UKS SMANSAQ) ====================
 const LOGO_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Logo UKS SMANSAQ">'
@@ -141,8 +149,8 @@ function isAdminNow(){return Session.user()?.role==='admin';}
 function telpTampil(v){const t=String(v||'').trim();if(!t)return '-';return isAdminNow()?esc(t):'********';}
 function telpEksport(v){const t=String(v||'').trim();if(!t)return '';return isAdminNow()?t:'********';}
 // ---- Tanggal lahir: untuk petugas hanya tahun yang tampil (tanggal & bulan disembunyikan) ----
-function tglLahirTampil(v){if(!v)return '-';if(Session.user()?.role==='petugas'){const y=String(v).match(/^(\d{4})/);return y?'**/**/'+y[1]:'-';}return fmtDate(v);}
-function tglLahirEksport(v){if(!v)return '';if(Session.user()?.role==='petugas'){const y=String(v).match(/^(\d{4})/);return y?'**-**-'+y[1]:'';}return String(v);}
+function tglLahirTampil(v){if(!v)return '-';if(isPetugasLike(Session.user()?.role)){const y=String(v).match(/^(\d{4})/);return y?'**/**/'+y[1]:'-';}return fmtDate(v);}
+function tglLahirEksport(v){if(!v)return '';if(isPetugasLike(Session.user()?.role)){const y=String(v).match(/^(\d{4})/);return y?'**-**-'+y[1]:'';}return String(v);}
 // ---- Nama orang tua: disembunyikan (*) kecuali untuk admin ----
 function namaOrtuTampil(v){const t=String(v||'').trim();if(!t)return '-';return isAdminNow()?esc(t):'********';}
 function namaOrtuEksport(v){const t=String(v||'').trim();if(!t)return '';return isAdminNow()?t:'********';}
@@ -303,12 +311,25 @@ const DB = {
   find(t,id){return this.db[t].find(r=>r.id===id);}
 };
 
+// ==================== v3.3.0: ROLE & AKUN GANDA (SISWA = PETUGAS) ====================
+const ROLE_LABEL={admin:'Admin',petugas:'Petugas UKS',supervisor:'Supervisor',ketua:'Supervisor',wakil:'Supervisor',siswa:'Siswa'};
+const isSupervisor=r=>r==='supervisor'||r==='ketua'||r==='wakil';   // 'ketua'/'wakil' = akun lama (v3.3.0), dianggap supervisor
+const isPetugasLike=r=>r==='petugas'||isSupervisor(r);
+const hasStokAccess=r=>r==='admin'||isSupervisor(r);
+const cleanUname=v=>String(v||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,'');
+function linkedSiswaOf(du){
+  if(!du||!isPetugasLike(du.role)||typeof DB==='undefined'||!DB.db||!DB.db.siswa)return null;
+  const nm=String(du.full_name||'').trim().toLowerCase(),un=String(du.username||'').toLowerCase(),ta=DB.db.tahunAjaranAktif;
+  const c=DB.db.siswa.filter(x=>(!x.tahun_ajaran||x.tahun_ajaran===ta)&&String(x.nama||'').trim().toLowerCase()===nm&&(cleanUname(String(x.nama||'').trim().split(/\s+/)[0])===un||cleanUname(x.nis)===un));
+  return c.length===1?c[0]:null;
+}
 // ==================== SESSION ====================
 const Session = {
   KEY:'uks_session',
   set(u){localStorage.setItem(this.KEY,JSON.stringify({user:u,loginAt:new Date().toISOString()}));},
   get(){try{return JSON.parse(localStorage.getItem(this.KEY));}catch{return null;}},
   clear(){localStorage.removeItem(this.KEY);},
+  setMode(m){const x=this.get();if(!x)return;x.mode=m;localStorage.setItem(this.KEY,JSON.stringify(x));},
   TTL:8*60*60*1000,
   user(){
     const s=this.get();if(!s||!s.user)return null;
@@ -321,7 +342,10 @@ const Session = {
     }
     const du=(typeof DB!=='undefined'&&DB.db&&DB.db.users)?DB.db.users.find(x=>x.id===s.user.id):null;
     if(!du||!u_isActive(du)){this.clear();return null;}
-    return {id:du.id,username:du.username,full_name:du.full_name,role:du.role};
+    const base={id:du.id,username:du.username,full_name:du.full_name,role:du.role};
+    const sw=linkedSiswaOf(du);
+    if(sw){base.siswa_id=sw.id;if(s.mode==='siswa')return {id:'S'+sw.id,siswa_id:sw.id,username:du.username,full_name:sw.nama,role:'siswa',staff_id:du.id,staff_role:du.role};}
+    return base;
   }
 };
 
@@ -548,6 +572,8 @@ function getBelumScreeningBy(mode){
   return getBelumScreening();
 }
 function getBelumScreening(){const done=new Set(DB.db.screening.map(x=>x.siswa_id));return getSiswaAktif().filter(s=>!done.has(s.id));}
+function petugasBox(nama){const n=nama||Session.user()?.full_name||'-';return `<div class="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-sm text-emerald-900"><i class="fa-solid fa-user-nurse text-emerald-600"></i><span>Petugas: <b>${esc(n)}</b></span></div>`;}
+function scrPetugasTeks(x){return isScrMandiri(x)?'Mandiri (diisi siswa)':(x.petugas_nama||'-');}
 function isScrMandiri(x){return String(x.petugas_id||'')==='S'+x.siswa_id;}
 function scrSumberBadge(x){return isScrMandiri(x)?'<span class="text-xs px-2 py-1 rounded-full bg-violet-100 text-violet-700 font-semibold whitespace-nowrap"><i class="fa-solid fa-user mr-1"></i>Mandiri</span>':'<span class="text-xs px-2 py-1 rounded-full bg-sky-100 text-sky-700 font-semibold whitespace-nowrap"><i class="fa-solid fa-user-nurse mr-1"></i>Petugas</span>';}
 function parseImtSafe(s){try{return s&&s.imt?JSON.parse(s.imt):null;}catch{return null;}}
@@ -703,6 +729,46 @@ function renderScreeningBelumMode(page,mode){
   draw();
 }
 
+
+// ==================== v3.2.8: UBAH PASSWORD (PETUGAS) ====================
+function renderUbahPassword(page){
+  const inp='w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm bg-white';
+  const lbl='block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide';
+  page.innerHTML=`
+    <div class="mb-6 slide-up"><h2 class="text-3xl font-bold text-gray-800">Ubah Password</h2><p class="text-gray-500 mt-1">Ganti password akun Anda. Gunakan minimal 6 karakter.</p></div>
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 max-w-md slide-up">
+      <form id="pwForm" class="space-y-4">
+        <div><label class="${lbl}">Password Lama *</label><input id="pw_lama" type="password" required autocomplete="current-password" class="${inp}"/></div>
+        <div><label class="${lbl}">Password Baru *</label><input id="pw_baru" type="password" required minlength="6" autocomplete="new-password" class="${inp}"/></div>
+        <div><label class="${lbl}">Ulangi Password Baru *</label><input id="pw_ulang" type="password" required minlength="6" autocomplete="new-password" class="${inp}"/></div>
+        <label class="flex items-center gap-2 text-xs text-gray-500 cursor-pointer"><input id="pw_show" type="checkbox" class="rounded"/> Tampilkan password</label>
+        <button id="pwBtn" type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-lg shadow-blue-600/30"><i class="fa-solid fa-key"></i> Simpan Password</button>
+      </form>
+    </div>`;
+  const ids=['pw_lama','pw_baru','pw_ulang'];
+  document.getElementById('pw_show').addEventListener('change',e=>ids.forEach(i=>{document.getElementById(i).type=e.target.checked?'text':'password';}));
+  document.getElementById('pwForm').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const lama=document.getElementById('pw_lama').value,baru=document.getElementById('pw_baru').value,ulang=document.getElementById('pw_ulang').value;
+    if(baru.length<6)return toast('Password baru minimal 6 karakter','error');
+    if(baru!==ulang)return toast('Ulangi password tidak sama','error');
+    if(baru===lama)return toast('Password baru harus berbeda dari password lama','error');
+    const btn=document.getElementById('pwBtn');btn.disabled=true;
+    try{
+      const u=Session.user();
+      if(CLOUD_ON){await Cloud.changeOwnPassword(u.username,lama,baru);}
+      else{
+        const du=DB.find('users',u.id);
+        if(!du||!verifyPassword(du,lama))throw new Error('Password lama salah');
+        DB.update('users',u.id,{...pwFields(baru),must_change:false});
+      }
+      toast('Password berhasil diubah');
+      document.getElementById('pwForm').reset();
+    }catch(err){toast(err.message||'Gagal mengubah password','error');}
+    btn.disabled=false;
+  });
+}
+
 // ==================== v3.2.5: AREA SISWA (Dashboard & Riwayat Kesehatan) ====================
 const RIWAYAT_META={
   screening:{label:'Screening',color:'emerald',icon:'fa-stethoscope'},
@@ -830,9 +896,11 @@ const View = {
   render(){
     const user=Session.user();
     if(!user){this.current='login';document.getElementById('modalContainer').innerHTML='';renderLogin();return;}
-    const allowed=['dashboard','siswa','siswa-detail','screening','screening-daftar','screening-belum','screening-belum-mandiri','screening-belum-petugas','riwayat','permintaan','kunjungan','rawan','laporan','setting','obat'];
+    const allowed=['dashboard','siswa','siswa-detail','screening','screening-daftar','screening-belum','screening-belum-mandiri','screening-belum-petugas','riwayat','permintaan','kunjungan','rawan','laporan','setting','obat','password'];
     if(!allowed.includes(this.current))this.current='dashboard';
     if(this.current==='setting'&&user.role!=='admin')this.current='dashboard';
+    if(this.current==='password'&&!isPetugasLike(user.role))this.current='dashboard';
+    if(this.current==='obat'&&!hasStokAccess(user.role))this.current='dashboard';
     if(user.role==='siswa'){if(!['dashboard','screening','riwayat'].includes(this.current))this.current='dashboard';}
     else if(this.current==='riwayat')this.current='dashboard';
     renderShell();
@@ -931,17 +999,18 @@ function renderShell(){
 
   const belumCount=user.role==='siswa'?0:getBelumScreening().length;
   const menu = [
-    { id:'dashboard', icon:'fa-gauge-high',  label:'Dashboard',         roles:['admin','petugas','siswa'] },
-    { id:'siswa',     icon:'fa-users',       label:'Data Siswa',        roles:['admin','petugas'] },
-    { id:'screening', icon:'fa-stethoscope', label:'Screening', roles:['admin','petugas'], badge: belumCount, badgeColor:'amber' },
+    { id:'dashboard', icon:'fa-gauge-high',  label:'Dashboard',         roles:['admin','petugas','supervisor','ketua','wakil','siswa'] },
+    { id:'siswa',     icon:'fa-users',       label:'Data Siswa',        roles:['admin','petugas','supervisor','ketua','wakil'] },
+    { id:'screening', icon:'fa-stethoscope', label:'Screening', roles:['admin','petugas','supervisor','ketua','wakil'], badge: belumCount, badgeColor:'amber' },
     { id:'screening', icon:'fa-stethoscope', label:'Screening Mandiri', roles:['siswa'] },
     { id:'riwayat',   icon:'fa-clock-rotate-left', label:'Riwayat Kesehatan', roles:['siswa'] },
-    { id:'permintaan',icon:'fa-pills',       label:'Permintaan Obat',   roles:['admin','petugas'], badge: permintaanPending, badgeColor:'amber' },
-    { id:'kunjungan', icon:'fa-clipboard-user',label:'Registrasi Pasien',roles:['admin','petugas'], badge: kunjunganAktif, badgeColor:'blue' },
-    { id:'rawan',     icon:'fa-user-injured',label:'Siswa Rawan',       roles:['admin','petugas'], badge: rawanCount, badgeColor:'rose' },
-    { id:'laporan',   icon:'fa-file-lines',  label:'Laporan',           roles:['admin','petugas'] },
-    { id:'obat',      icon:'fa-prescription-bottle-medical', label:'Stok Obat', roles:['admin','petugas'], badge: stokRendah, badgeColor:'rose' },
+    { id:'permintaan',icon:'fa-pills',       label:'Permintaan Obat',   roles:['admin','petugas','supervisor','ketua','wakil'], badge: permintaanPending, badgeColor:'amber' },
+    { id:'kunjungan', icon:'fa-clipboard-user',label:'Registrasi Pasien',roles:['admin','petugas','supervisor','ketua','wakil'], badge: kunjunganAktif, badgeColor:'blue' },
+    { id:'rawan',     icon:'fa-user-injured',label:'Siswa Rawan',       roles:['admin','petugas','supervisor','ketua','wakil'], badge: rawanCount, badgeColor:'rose' },
+    { id:'laporan',   icon:'fa-file-lines',  label:'Laporan',           roles:['admin','petugas','supervisor','ketua','wakil'] },
+    { id:'obat',      icon:'fa-prescription-bottle-medical', label:'Stok Obat', roles:['admin','supervisor','ketua','wakil'], badge: stokRendah, badgeColor:'rose' },
     { id:'setting',   icon:'fa-gear',        label:'Setting',           roles:['admin'] },
+    { id:'password',  icon:'fa-key',         label:'Ubah Password',     roles:['petugas','supervisor','ketua','wakil'] },
   ];
 
   const badgeOf = m => m.badge ? `<span class="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full ${m.badgeColor==='rose'?'bg-rose-500':m.badgeColor==='amber'?'bg-amber-500':'bg-blue-500'} text-white">${m.badge}</span>` : '';
@@ -963,6 +1032,8 @@ function renderShell(){
   }).join('');
 
   const taAktif = DB.db.tahunAjaranAktif || '-';
+  const swBtn=(fn,ic,label)=>`<div class="pt-2 mt-2 border-t border-gray-100"><button onclick="${fn}()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors text-left"><i class="fa-solid ${ic} w-4 text-center text-sm"></i><span class="font-medium text-sm">${label}</span><i class="fa-solid fa-right-left ml-auto text-[10px] text-emerald-500"></i></button></div>`;
+  const switchBtn=(user.role==='siswa'&&user.staff_id)?swBtn('aksesPetugas','fa-user-nurse','Akses '+(ROLE_LABEL[user.staff_role]||'Petugas')):(isPetugasLike(user.role)&&user.siswa_id?swBtn('aksesSiswa','fa-user-graduate','Akses Siswa'):'');
 
   document.getElementById('app').innerHTML = `
   <div class="min-h-screen flex bg-slate-50">
@@ -972,7 +1043,7 @@ function renderShell(){
           <div class="w-10 h-10 shrink-0">${LOGO_ICON_SVG}</div>
           <div class="flex-1 min-w-0">
             <p class="font-black text-sm text-gray-800 leading-tight"><span class="text-emerald-700">UKS</span> SMANSAQ</p>
-            <p class="text-[10px] text-gray-500 truncate">${esc(user.full_name)} · ${user.role==='admin'?'Admin':user.role==='siswa'?'Siswa':'Petugas'}</p>
+            <p class="text-[10px] text-gray-500 truncate">${esc(user.full_name)} · ${ROLE_LABEL[user.role]||'Petugas UKS'}</p>
           </div>
         </div>
         <div class="mt-2 text-[10px] text-gray-400 flex items-center gap-1">
@@ -980,7 +1051,7 @@ function renderShell(){
           <span class="ml-auto text-gray-300">v${APP_VERSION}</span>
         </div>
       </div>
-      <nav class="flex-1 p-2 space-y-0.5 overflow-y-auto">${nav}</nav>
+      <nav class="flex-1 p-2 space-y-0.5 overflow-y-auto">${nav}${switchBtn}</nav>
       <div class="p-2 border-t border-gray-100">
         ${CLOUD_ON&&user.role!=='siswa'?`<button onclick="Cloud.refresh()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors text-left"><i class="fa-solid fa-rotate w-4 text-center text-sm"></i><span class="font-medium text-sm">Muat Ulang Data</span></button>`:''}
         <p class="text-[10px] text-gray-400 text-center mt-2">© ${new Date().getFullYear()} ${esc(APP_NAME)} · v${APP_VERSION}</p>
@@ -1011,7 +1082,7 @@ function renderShell(){
     dashboard:(p)=>user.role==='siswa'?renderDashboardSiswa(p):renderDashboard(p), siswa:renderSiswa, rawan:renderSiswaRawan,
     'screening-daftar':renderScreeningDaftar, 'screening-belum':renderScreeningBelum, 'screening-belum-mandiri':renderScreeningBelumMandiri, 'screening-belum-petugas':renderScreeningBelumPetugas, riwayat:renderRiwayatSiswa,
     screening:renderScreening, kunjungan:renderKunjungan, permintaan:renderPermintaan,
-    obat:renderStokObat, laporan:renderLaporan, setting:renderSetting
+    obat:renderStokObat, laporan:renderLaporan, setting:renderSetting, password:renderUbahPassword
   };
   if(View.current==='siswa-detail') renderSiswaDetail(page,View.params.id);
   else if(renderers[View.current]) renderers[View.current](page);
@@ -1020,6 +1091,8 @@ function toggleSidebar(){
   document.getElementById('sidebar').classList.toggle('-translate-x-full');
   document.getElementById('sidebarOverlay').classList.toggle('hidden');
 }
+window.aksesSiswa=()=>{Session.setMode('siswa');View.current='dashboard';View.render();toast('Beralih ke akses Siswa','info');};
+window.aksesPetugas=()=>{Session.setMode('petugas');View.current='dashboard';View.render();toast('Beralih ke akses Petugas','info');};
 async function doLogout(){
   if(!await confirmDialog('Yakin ingin keluar dari aplikasi?')) return;
   if(CLOUD_ON){await Cloud.flush();Cloud.logout();}
@@ -1057,7 +1130,7 @@ function renderDashboard(page){
       ${card('Screening Bulan Ini',stats.screeningBulanIni,'fa-stethoscope','emerald')}
       ${card('Permintaan Obat',stats.permintaanPending,'fa-pills','amber')}
     </div>
-    ${stokRendah.length?`<div class="bg-amber-50 border border-amber-200 rounded-2xl p-5 slide-up"><div class="flex items-start gap-3"><div class="w-11 h-11 rounded-full bg-amber-100 flex items-center justify-center shrink-0"><i class="fa-solid fa-triangle-exclamation text-amber-600 text-lg"></i></div><div class="flex-1"><p class="font-bold text-amber-800">⚠ ${stokRendah.length} Obat Stok Rendah</p><p class="text-xs text-amber-700 mt-1">${stokRendah.map(o=>`${o.nama} (${o.stok} ${o.satuan})`).join(' · ')}</p>${user.role!=='siswa'?`<button onclick="View.go('obat')" class="mt-2 text-xs font-semibold text-amber-700 hover:underline">Kelola stok obat →</button>`:''}</div></div></div>`:''}
+    ${stokRendah.length&&hasStokAccess(Session.user()?.role)?`<div class="bg-amber-50 border border-amber-200 rounded-2xl p-5 slide-up"><div class="flex items-start gap-3"><div class="w-11 h-11 rounded-full bg-amber-100 flex items-center justify-center shrink-0"><i class="fa-solid fa-triangle-exclamation text-amber-600 text-lg"></i></div><div class="flex-1"><p class="font-bold text-amber-800">⚠ ${stokRendah.length} Obat Stok Rendah</p><p class="text-xs text-amber-700 mt-1">${stokRendah.map(o=>`${o.nama} (${o.stok} ${o.satuan})`).join(' · ')}</p>${user.role!=='siswa'?`<button onclick="View.go('obat')" class="mt-2 text-xs font-semibold text-amber-700 hover:underline">Kelola stok obat →</button>`:''}</div></div></div>`:''}
   `;
 }
 function card(label,value,icon,color){
@@ -1079,7 +1152,7 @@ function renderSiswa(page){
         ${isAdmin?`<button onclick="openSiswaForm()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-lg shadow-blue-600/30 transition-all"><i class="fa-solid fa-plus"></i> Tambah</button>`:''}
       </div>
     </div>
-    ${!isAdmin?`<div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex items-start gap-3 slide-up"><i class="fa-solid fa-circle-info text-blue-600 mt-0.5"></i><p class="text-sm text-blue-900">Sebagai <b>Petugas UKS</b>, Anda dapat melihat data siswa, melakukan screening, dan menambah rekam medis. Nama orang tua, nomor telepon, dan tanggal-bulan lahir disamarkan.</p></div>`:''}
+    ${!isAdmin?`<div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex items-start gap-3 slide-up"><i class="fa-solid fa-circle-info text-blue-600 mt-0.5"></i><p class="text-sm text-blue-900">Sebagai <b>${esc(ROLE_LABEL[user.role]||'Petugas UKS')}</b>, Anda dapat melihat data siswa, melakukan screening, dan menambah rekam medis. Nama orang tua, nomor telepon, dan tanggal-bulan lahir disamarkan.</p></div>`:''}
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden slide-up">
       <div class="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
         <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
@@ -1130,7 +1203,7 @@ function renderSiswa(page){
         <td class="px-6 py-4 text-sm text-gray-600">${esc(s.riwayat_penyakit||'-')}</td>
         <td class="px-6 py-4 text-right whitespace-nowrap">
           <button onclick="View.go('siswa-detail',{id:${s.id}})" class="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50" title="Detail"><i class="fa-solid fa-eye"></i></button>
-          ${isAdmin?`<button onclick="openSiswaForm(${s.id})" class="p-2 rounded-lg text-blue-600 hover:bg-blue-50" title="Edit"><i class="fa-solid fa-pen"></i></button><button onclick="hapusSiswa(${s.id})" class="p-2 rounded-lg text-rose-600 hover:bg-rose-50" title="Hapus"><i class="fa-solid fa-trash"></i></button>`:''}
+          ${isAdmin?`<button onclick="openSiswaForm(${s.id})" class="p-2 rounded-lg text-blue-600 hover:bg-blue-50" title="Edit"><i class="fa-solid fa-pen"></i></button><button onclick="jadikanPetugas(${s.id})" class="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50" title="Jadikan Petugas UKS"><i class="fa-solid fa-user-shield"></i></button><button onclick="hapusSiswa(${s.id})" class="p-2 rounded-lg text-rose-600 hover:bg-rose-50" title="Hapus"><i class="fa-solid fa-trash"></i></button>`:''}
         </td>
       </tr>`).join('');
   };
@@ -1357,7 +1430,7 @@ function renderSiswaDetail(page,id){
     </div>
     ${kunjungan.length?`<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6 slide-up"><div class="p-5 border-b border-gray-100"><h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-clipboard-user text-indigo-600"></i> Riwayat Kunjungan (${kunjungan.length})</h3></div><div class="p-4 max-h-72 overflow-y-auto">${kunjungan.map(k=>{const st=STATUS_KUNJUNGAN[k.status];return `<div class="p-3 rounded-xl hover:bg-gray-50 border border-gray-100 mb-2"><div class="flex justify-between items-start mb-1 gap-2"><p class="font-semibold text-gray-800 text-sm">${fmtDateTime(k.tanggal)}</p><span class="text-xs px-2 py-1 rounded-full bg-${st.color}-100 text-${st.color}-700 font-semibold">${st.label}</span></div><p class="text-xs text-gray-700">${esc(k.keluhan)}</p>${k.tindakan?`<p class="text-xs text-gray-500 mt-1">Tindakan: ${esc(k.tindakan)}</p>`:''}</div>`;}).join('')}</div></div>`:''}
     <div class="grid lg:grid-cols-2 gap-6">
-      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden slide-up"><div class="p-5 border-b border-gray-100"><h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-stethoscope text-emerald-600"></i> Screening (${screening.length})</h3></div><div class="p-4 max-h-96 overflow-y-auto">${screening.length?screening.map(s=>{const imt=s.imt?JSON.parse(s.imt):null;return `<div class="p-3 rounded-xl hover:bg-gray-50 border border-gray-100 mb-2"><div class="flex justify-between items-start mb-1 gap-2"><p class="font-semibold text-gray-800 text-sm">${fmtDate(s.tanggal)}</p>${imt?`<span class="text-xs px-2 py-1 rounded-full bg-${imt.color}-100 text-${imt.color}-700 font-semibold whitespace-nowrap">${imt.imt} · ${imt.status}</span>`:''}</div><div class="text-xs text-gray-600 space-y-0.5"><p>TB: ${s.tinggi_badan||'-'} cm · BB: ${s.berat_badan||'-'} kg</p><p>TD: ${esc(s.tekanan_darah||'-')} · Suhu: ${s.suhu||'-'}°C · Nadi: ${s.nadi||'-'}</p>${s.gula_darah?`<p>Gula Darah: <span class="font-semibold">${s.gula_darah} mg/dL</span></p>`:''}${s.catatan?`<p class="text-gray-500 italic mt-1">"${esc(s.catatan)}"</p>`:''}</div></div>`;}).join(''):'<p class="text-center py-8 text-gray-400 text-sm">Belum ada screening</p>'}</div></div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden slide-up"><div class="p-5 border-b border-gray-100"><h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-stethoscope text-emerald-600"></i> Screening (${screening.length})</h3></div><div class="p-4 max-h-96 overflow-y-auto">${screening.length?screening.map(s=>{const imt=s.imt?JSON.parse(s.imt):null;return `<div class="p-3 rounded-xl hover:bg-gray-50 border border-gray-100 mb-2"><div class="flex justify-between items-start mb-1 gap-2"><p class="font-semibold text-gray-800 text-sm">${fmtDate(s.tanggal)}</p>${imt?`<span class="text-xs px-2 py-1 rounded-full bg-${imt.color}-100 text-${imt.color}-700 font-semibold whitespace-nowrap">${imt.imt} · ${imt.status}</span>`:''}</div><div class="text-xs text-gray-600 space-y-0.5"><p>TB: ${s.tinggi_badan||'-'} cm · BB: ${s.berat_badan||'-'} kg</p><p>TD: ${esc(s.tekanan_darah||'-')} · Suhu: ${s.suhu||'-'}°C · Nadi: ${s.nadi||'-'}</p>${s.gula_darah?`<p>Gula Darah: <span class="font-semibold">${s.gula_darah} mg/dL</span></p>`:''}<p class="text-gray-400">Petugas: ${esc(scrPetugasTeks(s))}</p>${s.catatan?`<p class="text-gray-500 italic mt-1">"${esc(s.catatan)}"</p>`:''}</div></div>`;}).join(''):'<p class="text-center py-8 text-gray-400 text-sm">Belum ada screening</p>'}</div></div>
       <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden slide-up"><div class="p-5 border-b border-gray-100"><h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-notes-medical text-blue-600"></i> Rekam Medis (${rekam.length})</h3></div><div class="p-4 max-h-96 overflow-y-auto">${rekam.length?rekam.map(r=>`<div class="p-3 rounded-xl hover:bg-gray-50 border border-gray-100 mb-2"><div class="flex justify-between items-start mb-1 gap-2"><p class="font-semibold text-gray-800 text-sm">${fmtDateTime(r.tanggal)}</p><button onclick="hapusRekam(${r.id})" class="p-1 rounded text-rose-500 hover:bg-rose-50"><i class="fa-solid fa-trash text-xs"></i></button></div><div class="text-xs text-gray-600 space-y-1"><p><span class="font-semibold">Keluhan:</span> ${esc(r.keluhan)}</p>${r.diagnosis?`<p><span class="font-semibold">Diagnosis:</span> ${esc(r.diagnosis)}</p>`:''}${r.tindakan?`<p><span class="font-semibold">Tindakan:</span> ${esc(r.tindakan)}</p>`:''}${r.obat?`<p><span class="font-semibold">Obat:</span> ${esc(r.obat)}</p>`:''}</div></div>`).join(''):'<p class="text-center py-8 text-gray-400 text-sm">Belum ada rekam medis</p>'}</div></div>
     </div>`;
 }
@@ -1394,12 +1467,12 @@ window.cetakRiwayatSiswa = id => {
   const kjn=DB.db.kunjungan.filter(r=>r.siswa_id===id).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
   const risk=Session.user()?.role==='siswa'?null:analisaSiswaRawan().find(x=>x.siswa.id===id);
   const rows=[];
-  kjn.forEach(k=>rows.push(['Kunjungan',fmtDateTime(k.tanggal),k.keluhan,'-',k.tindakan||'-',STATUS_KUNJUNGAN[k.status]?.label||k.status]));
-  scr.forEach(s=>{const imt=s.imt?JSON.parse(s.imt):null;rows.push(['Screening',fmtDate(s.tanggal),`TB: ${s.tinggi_badan||'-'} cm, BB: ${s.berat_badan||'-'} kg`,imt?`${imt.imt} (${imt.status})`:'-',`TD: ${s.tekanan_darah||'-'}, Suhu: ${s.suhu||'-'}°C, Gula: ${s.gula_darah||'-'} mg/dL`,'-']);});
-  DB.db.permintaanObat.filter(p=>p.siswa_id===id).forEach(p=>rows.push(['Permintaan Obat',fmtDateTime(p.tanggal),p.alasan||'-','-',(DB.find('obat',p.obat_id)?.nama||'Obat')+' x'+(p.jumlah||'-'),STATUS_PERMINTAAN[p.status]?.label||p.status]));
-  rkm.forEach(r=>rows.push(['Rekam Medis',fmtDateTime(r.tanggal),r.keluhan,r.diagnosis||'-',r.tindakan||'-',r.obat||'-']));
+  kjn.forEach(k=>rows.push(['Kunjungan',fmtDateTime(k.tanggal),k.keluhan,'-',k.tindakan||'-',STATUS_KUNJUNGAN[k.status]?.label||k.status,k.petugas_nama||'-']));
+  scr.forEach(s=>{const imt=s.imt?JSON.parse(s.imt):null;rows.push(['Screening',fmtDate(s.tanggal),`TB: ${s.tinggi_badan||'-'} cm, BB: ${s.berat_badan||'-'} kg`,imt?`${imt.imt} (${imt.status})`:'-',`TD: ${s.tekanan_darah||'-'}, Suhu: ${s.suhu||'-'}°C, Gula: ${s.gula_darah||'-'} mg/dL`,'-',scrPetugasTeks(s)]);});
+  DB.db.permintaanObat.filter(p=>p.siswa_id===id).forEach(p=>rows.push(['Permintaan Obat',fmtDateTime(p.tanggal),p.alasan||'-','-',(DB.find('obat',p.obat_id)?.nama||'Obat')+' x'+(p.jumlah||'-'),STATUS_PERMINTAAN[p.status]?.label||p.status,p.pemohon_nama||'-']));
+  rkm.forEach(r=>rows.push(['Rekam Medis',fmtDateTime(r.tanggal),r.keluhan,r.diagnosis||'-',r.tindakan||'-',r.obat||'-',r.petugas_nama||'-']));
   const footer=`<div style="margin-top:16px;padding:10px;border:1px solid #333;font-size:11px"><p style="margin:0 0 4px;font-weight:600">Biodata:</p><p style="margin:2px 0">NIS: ${esc(sw.nis)} · Nama: ${esc(sw.nama)} · Kelas: ${esc(sw.kelas||'-')} · TA: ${esc(sw.tahun_ajaran||'-')}</p><p style="margin:2px 0">Alergi: ${esc(sw.alergi||'-')} · Riwayat: ${esc(sw.riwayat_penyakit||'-')}</p>${risk?`<p style="margin:6px 0 0;font-weight:600;color:#dc2626">⚠ Rawan: ${risk.level.toUpperCase()} (skor ${risk.severity})</p>`:''}</div>`;
-  printReport({title:'Riwayat Kesehatan Siswa',subtitle:sw.nama,meta:`NIS: ${sw.nis}`,headers:['Jenis','Tanggal','Keluhan','Diagnosis/IMT','Tindakan','Catatan/Status'],rows,footer});
+  printReport({title:'Riwayat Kesehatan Siswa',subtitle:sw.nama,meta:`NIS: ${sw.nis}`,headers:['Jenis','Tanggal','Keluhan','Diagnosis/IMT','Tindakan','Catatan/Status','Petugas'],rows,footer});
 };
 
 // ==================== SCREENING ====================
@@ -1415,6 +1488,7 @@ function renderScreening(page){
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 max-w-4xl slide-up">
       <form id="screeningForm" class="space-y-6">
         ${isSiswa&&meSiswa?siswaSelfBox(meSiswa):kelasSiswaSelectHTML('sc_kelas','sc_siswa',{selectedKelas:preKelas,selectedSiswa:preId})}
+        ${isSiswa?'':petugasBox()}
         <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Tanggal Screening *</label><input id="sc_tanggal" type="date" required value="${todayISO()}" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm"/></div>
         <div><h3 class="font-semibold text-gray-800 mb-3 flex items-center gap-2"><i class="fa-solid fa-weight-scale text-blue-600"></i> Antropometri</h3>
           <div class="grid sm:grid-cols-3 gap-4">
@@ -1519,7 +1593,7 @@ function renderPermintaan(page){
           <p class="text-sm text-gray-700 font-semibold">Jumlah: ${p.jumlah} ${esc(ob?.satuan||'')}</p>
           <p class="text-xs text-gray-500 mt-1">Alasan: ${esc(p.alasan)}</p>
           ${penerimaHTML}
-          <p class="text-[10px] text-gray-400 mt-2">Diminta: ${esc(p.pemohon_nama)} · ${fmtDateTime(p.tanggal)}</p>
+          <p class="text-[10px] text-gray-400 mt-2">Petugas: ${esc(p.pemohon_nama||'-')} · ${fmtDateTime(p.tanggal)}</p>
           ${p.status!=='menunggu'&&p.approver_nama?`<p class="text-[10px] text-gray-400 mt-0.5">Diproses: ${esc(p.approver_nama)}</p>`:''}
           ${p.catatan_admin?`<div class="mt-2 p-2 rounded-lg bg-gray-50 border border-gray-100 text-xs text-gray-600"><b>Catatan admin:</b> ${esc(p.catatan_admin)}</div>`:''}
         </div>
@@ -1544,6 +1618,7 @@ window.openPermintaanForm = () => {
       <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full my-8">
         <div class="flex items-center justify-between p-6 border-b border-gray-100"><div><h3 class="font-bold text-gray-800 text-lg">Ajukan Permintaan Obat</h3><p class="text-xs text-gray-500 mt-0.5">Permintaan akan ditinjau admin</p></div><button onclick="closeModal()" class="p-2 rounded-lg hover:bg-gray-100"><i class="fa-solid fa-xmark text-gray-500"></i></button></div>
         <form id="permintaanForm" class="p-6 space-y-4">
+          ${petugasBox()}
           <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Pilih Obat *</label><select id="pm_obat" required class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm bg-white"><option value="">- Pilih Obat -</option>${obatList.map(o=>`<option value="${o.id}">${esc(o.nama)} — Stok: ${o.stok} ${esc(o.satuan)}</option>`).join('')}</select></div>
           <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Jumlah *</label><input id="pm_jumlah" type="number" min="1" required value="1" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm"/><p id="pm_stokInfo" class="text-xs text-gray-500 mt-1"></p></div>
           <div>
@@ -1749,6 +1824,7 @@ window.openKunjunganForm = (id=null) => {
             <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Waktu Kunjungan</label><input id="kj_tanggal" type="datetime-local" value="${k?.tanggal?k.tanggal.substring(0,16):new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().substring(0,16)}" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm"/></div>
             <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Prioritas</label><select id="kj_prioritas" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm bg-white"><option value="biasa" ${k?.prioritas==='biasa'||!k?'selected':''}>Biasa</option><option value="mendesak" ${k?.prioritas==='mendesak'?'selected':''}>⚠ Mendesak</option></select></div>
           </div>
+          ${petugasBox(k?.petugas_nama)}
           <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Keluhan Utama *</label><input id="kj_keluhan" required value="${esc(k?.keluhan||'')}" placeholder="cth: Pusing, demam" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm"/></div>
           <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Gejala</label><textarea id="kj_gejala" rows="2" placeholder="cth: Demam 38°C, batuk, pilek" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm">${esc(k?.gejala||'')}</textarea></div>
           <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Tindakan Awal</label><textarea id="kj_tindakan" rows="2" placeholder="cth: Diberi paracetamol" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm">${esc(k?.tindakan||'')}</textarea></div>
@@ -1808,7 +1884,7 @@ window.exportKunjungan = () => {
 // ==================== STOK OBAT ====================
 function renderStokObat(page){
   const user=Session.user();
-  if(user.role!=='admin'&&user.role!=='petugas'){page.innerHTML=`<div class="text-center py-20"><i class="fa-solid fa-lock text-5xl text-gray-300 mb-3"></i><p class="text-gray-500">Akses khusus staf UKS</p></div>`;return;}
+  if(!hasStokAccess(user.role)){page.innerHTML=`<div class="text-center py-20"><i class="fa-solid fa-lock text-5xl text-gray-300 mb-3"></i><p class="text-gray-500">Akses khusus admin dan supervisor</p></div>`;return;}
   const all=DB.db.obat;
   const stats={total:all.length,stokRendah:all.filter(o=>o.stok<=o.stok_min).length,stokHabis:all.filter(o=>o.stok===0).length,totalItem:all.reduce((s,o)=>s+o.stok,0)};
   page.innerHTML = `
@@ -1856,7 +1932,7 @@ function renderStokObat(page){
 }
 
 window.openObatForm = (id=null) => {
-  if(!['admin','petugas'].includes(Session.user()?.role))return toast('Akses ditolak','error');
+  if(!hasStokAccess(Session.user()?.role))return toast('Akses ditolak','error');
   const o=id?DB.find('obat',id):null;
   document.getElementById('modalContainer').innerHTML = `
     <div class="fixed inset-0 z-[80] bg-black/50 flex items-center justify-center p-4 overflow-y-auto slide-up">
@@ -1883,7 +1959,7 @@ window.openObatForm = (id=null) => {
   });
 };
 window.tambahStok = id => {
-  if(!['admin','petugas'].includes(Session.user()?.role))return toast('Akses ditolak','error');
+  if(!hasStokAccess(Session.user()?.role))return toast('Akses ditolak','error');
   const o=DB.find('obat',id);if(!o)return;
   document.getElementById('modalContainer').innerHTML = `
     <div class="fixed inset-0 z-[80] bg-black/50 flex items-center justify-center p-4 slide-up">
@@ -2049,16 +2125,16 @@ function getLaporanData(){
   }
   if(jenis==='screening'){
     const data=DB.db.screening.filter(x=>inRange(x.tanggal)).map(x=>({...x,_s:DB.find('siswa',x.siswa_id)})).filter(x=>x._s&&filterKelas(x._s)).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
-    return {jenis,kelas,dari,sampai,headers:['Tanggal','NIS','Nama','Kelas','TB','BB','IMT','Status','TD','Suhu','Nadi','Gula'],
-      rows:data.map(x=>{const imt=x.imt?JSON.parse(x.imt):null;return [fmtDate(x.tanggal),x._s.nis,x._s.nama,x._s.kelas||'-',x.tinggi_badan||'-',x.berat_badan||'-',imt?.imt||'-',imt?.status||'-',x.tekanan_darah||'-',x.suhu||'-',x.nadi||'-',x.gula_darah||'-'];}),// eslint-disable-line
-      exportRows:data.map(x=>{const imt=x.imt?JSON.parse(x.imt):null;return {'Tanggal':fmtDate(x.tanggal),'NIS':x._s.nis,'Nama':x._s.nama,'Kelas':x._s.kelas||'','TB (cm)':x.tinggi_badan||'','BB (kg)':x.berat_badan||'','IMT':imt?.imt||'','Status Gizi':imt?.status||'','TD':x.tekanan_darah||'','Suhu':x.suhu||'','Nadi':x.nadi||'','Respirasi':x.respirasi||'','Gula Darah (mg/dL)':x.gula_darah||'','Catatan':x.catatan||''};}),
+    return {jenis,kelas,dari,sampai,headers:['Tanggal','NIS','Nama','Kelas','TB','BB','IMT','Status','TD','Suhu','Nadi','Gula','Petugas'],
+      rows:data.map(x=>{const imt=x.imt?JSON.parse(x.imt):null;return [fmtDate(x.tanggal),x._s.nis,x._s.nama,x._s.kelas||'-',x.tinggi_badan||'-',x.berat_badan||'-',imt?.imt||'-',imt?.status||'-',x.tekanan_darah||'-',x.suhu||'-',x.nadi||'-',x.gula_darah||'-',scrPetugasTeks(x)];}),// eslint-disable-line
+      exportRows:data.map(x=>{const imt=x.imt?JSON.parse(x.imt):null;return {'Tanggal':fmtDate(x.tanggal),'NIS':x._s.nis,'Nama':x._s.nama,'Kelas':x._s.kelas||'','TB (cm)':x.tinggi_badan||'','BB (kg)':x.berat_badan||'','IMT':imt?.imt||'','Status Gizi':imt?.status||'','TD':x.tekanan_darah||'','Suhu':x.suhu||'','Nadi':x.nadi||'','Respirasi':x.respirasi||'','Gula Darah (mg/dL)':x.gula_darah||'','Catatan':x.catatan||'','Petugas':scrPetugasTeks(x)};}),
       title:'Riwayat Screening'};
   }
   if(jenis==='rekam'){
     const data=DB.db.rekam.filter(x=>inRange(x.tanggal)).map(x=>({...x,_s:DB.find('siswa',x.siswa_id)})).filter(x=>x._s&&filterKelas(x._s)).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
-    return {jenis,kelas,dari,sampai,headers:['Tanggal','NIS','Nama','Kelas','Keluhan','Diagnosis','Tindakan','Obat'],
-      rows:data.map(x=>[fmtDateTime(x.tanggal),x._s.nis,x._s.nama,x._s.kelas||'-',x.keluhan,x.diagnosis||'-',x.tindakan||'-',x.obat||'-']),
-      exportRows:data.map(x=>({'Tanggal':fmtDateTime(x.tanggal),'NIS':x._s.nis,'Nama':x._s.nama,'Kelas':x._s.kelas||'','Keluhan':x.keluhan,'Diagnosis':x.diagnosis||'','Tindakan':x.tindakan||'','Obat':x.obat||'','Catatan':x.catatan||''})),
+    return {jenis,kelas,dari,sampai,headers:['Tanggal','NIS','Nama','Kelas','Keluhan','Diagnosis','Tindakan','Obat','Petugas'],
+      rows:data.map(x=>[fmtDateTime(x.tanggal),x._s.nis,x._s.nama,x._s.kelas||'-',x.keluhan,x.diagnosis||'-',x.tindakan||'-',x.obat||'-',x.petugas_nama||'-']),
+      exportRows:data.map(x=>({'Tanggal':fmtDateTime(x.tanggal),'NIS':x._s.nis,'Nama':x._s.nama,'Kelas':x._s.kelas||'','Keluhan':x.keluhan,'Diagnosis':x.diagnosis||'','Tindakan':x.tindakan||'','Obat':x.obat||'','Catatan':x.catatan||'','Petugas':x.petugas_nama||''})),
       title:'Riwayat Rekam Medis'};
   }
   if(jenis==='rawan'){
@@ -2070,7 +2146,7 @@ function getLaporanData(){
   }
   if(jenis==='obat'){
     const data=DB.db.permintaanObat.filter(x=>inRange(x.tanggal)).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
-    return {jenis,kelas,dari,sampai,headers:['Tanggal','Obat','Jumlah','Penerima','Alasan','Status','Pemohon'],
+    return {jenis,kelas,dari,sampai,headers:['Tanggal','Obat','Jumlah','Penerima','Alasan','Status','Petugas (Pemohon)'],
       rows:data.map(p=>{
         const ob=DB.find('obat',p.obat_id);
         const pType=p.penerima_type||(p.siswa_id?'siswa':'umum');
@@ -2594,9 +2670,12 @@ function renderSetting(page){
           <i class="fa-solid fa-user-shield text-blue-600"></i> Kelola User
           <span class="text-xs font-normal text-gray-500">(${users.length} akun)</span>
         </h3>
+        <div class="flex flex-wrap gap-2">
+        <button onclick="openPetugasDariSiswa()" class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm"><i class="fa-solid fa-user-graduate"></i> Tambah Petugas dari Siswa</button>
         <button onclick="openUserForm()" class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm">
           <i class="fa-solid fa-plus"></i> Tambah User
         </button>
+        </div>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full">
@@ -2614,7 +2693,7 @@ function renderSetting(page){
               <tr class="hover:bg-gray-50">
                 <td class="px-6 py-4 font-semibold text-gray-800 text-sm">${esc(u.full_name)} ${u.id===user.id?'<span class="text-xs text-blue-600 font-normal">(Anda)</span>':''}</td>
                 <td class="px-6 py-4 text-sm text-gray-600">${esc(u.username)}</td>
-                <td class="px-6 py-4"><span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${u.role==='admin'?'bg-purple-100 text-purple-700':'bg-emerald-100 text-emerald-700'}"><i class="fa-solid ${u.role==='admin'?'fa-user-tie':'fa-user-nurse'}"></i>${u.role==='admin'?'Admin':'Petugas'}</span></td>
+                <td class="px-6 py-4"><span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${u.role==='admin'?'bg-purple-100 text-purple-700':isSupervisor(u.role)?'bg-amber-100 text-amber-700':'bg-emerald-100 text-emerald-700'}"><i class="fa-solid ${u.role==='admin'?'fa-user-tie':isSupervisor(u.role)?'fa-user-gear':'fa-user-nurse'}"></i>${ROLE_LABEL[u.role]||u.role}</span></td>
                 <td class="px-6 py-4 text-sm">${u_isActive(u)?'<span class="text-emerald-600 font-semibold">● Aktif</span>':'<span class="text-gray-400 font-semibold">● Nonaktif</span>'}</td>
                 <td class="px-6 py-4 text-right whitespace-nowrap">
                   <button onclick="openUserForm(${esc(JSON.stringify(u.id))})" class="p-2 rounded-lg text-blue-600 hover:bg-blue-50" title="Edit"><i class="fa-solid fa-pen"></i></button>
@@ -2627,7 +2706,7 @@ function renderSetting(page){
       </div>
       <div class="p-4 bg-blue-50 border-t border-blue-200 text-xs text-blue-900">
         <i class="fa-solid fa-circle-info text-blue-600 mr-1"></i>
-        <b>Admin</b>: akses penuh (semua menu). <b>Petugas UKS</b>: kunjungan, screening, permintaan obat, laporan, lihat siswa.
+        <b>Admin</b>: akses penuh (semua menu). <b>Petugas UKS</b>: kunjungan, screening, permintaan obat, laporan, lihat siswa (tanpa Stok Obat). <b>Supervisor</b>: sama dengan petugas ditambah Stok Obat.
       </div>
     </div>`;
 }
@@ -2657,18 +2736,125 @@ window.hapusKelas = async nama => {
   View.render();
 };
 
-window.openUserForm = (id=null) => {
+window.jadikanPetugas = id => { openPetugasDariSiswa(id); };
+window.openPetugasDariSiswa = (preId=null) => {
+  if(Session.user().role!=='admin'){toast('Hanya admin','error');return;}
+  const list=getSiswaAktif().filter(x=>x.tanggal_lahir).sort((x,y)=>String(x.kelas||'').localeCompare(String(y.kelas||''),'id')||String(x.nama).localeCompare(String(y.nama),'id'));
+  if(!list.length){toast('Belum ada siswa dengan tanggal lahir terisi','error');return;}
+  const tglOf=sw=>String(sw.tanggal_lahir).slice(0,10);
+  const usedNames=extra=>{const set=new Set(DB.db.users.map(x=>String(x.username).toLowerCase()));(extra||[]).forEach(n=>set.add(n));return set;};
+  // username = nama depan; bila sudah dipakai -> NIS. 'extra' = username yang baru dibuat pada batch yang sama
+  const unameOf=(sw,extra)=>{
+    const taken=usedNames(extra);
+    const f=cleanUname(String(sw.nama||'').trim().split(/\s+/)[0]);
+    if(f.length>=3&&!taken.has(f))return f;
+    const n=cleanUname(sw.nis);return n.length>=3?n:f;
+  };
+  // siswa sudah punya akun staf? (akun staf yang tertaut ke siswa tsb)
+  const sudahPetugas=new Set(DB.db.users.map(u=>linkedSiswaOf(u)).filter(Boolean).map(x=>String(x.id)));
+  const kelasList=[...new Set(list.map(x=>x.kelas||'').filter(Boolean))];
+  const inp='w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm bg-white';
+  const lbl='block text-xs font-semibold text-gray-600 mb-1.5 uppercase';
+  const picked=new Set(preId&&!sudahPetugas.has(String(preId))?[String(preId)]:[]);
+  document.getElementById('modalContainer').innerHTML=`
+    <div class="fixed inset-0 z-[80] bg-black/50 flex items-center justify-center p-4 overflow-y-auto slide-up">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full my-8">
+        <div class="flex items-center justify-between p-6 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-lg">Tambah Petugas dari Siswa</h3><button type="button" onclick="closeModal()" class="p-2 rounded-lg hover:bg-gray-100"><i class="fa-solid fa-xmark text-gray-500"></i></button></div>
+        <form id="pdsForm" class="p-6 space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div><label class="${lbl}">Cari Siswa</label><input id="pds_cari" placeholder="Nama / NIS..." class="${inp}"/></div>
+            <div><label class="${lbl}">Kelas</label><select id="pds_kelas" class="${inp}"><option value="">Semua Kelas</option>${kelasList.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join('')}</select></div>
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-1.5 gap-2">
+              <label class="${lbl} mb-0">Pilih Siswa *</label>
+              <span id="pds_count" class="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">0 dipilih</span>
+            </div>
+            <label class="flex items-center gap-3 px-3 py-2 bg-gray-50 border-2 border-b-0 border-gray-200 rounded-t-xl cursor-pointer select-none">
+              <input type="checkbox" id="pds_all" class="w-4 h-4 accent-emerald-600 cursor-pointer"/>
+              <span class="text-sm font-semibold text-gray-700">Pilih semua yang tampil</span>
+            </label>
+            <div id="pds_list" class="max-h-72 overflow-y-auto border-2 border-gray-200 rounded-b-xl divide-y divide-gray-100"></div>
+          </div>
+          <div><label class="${lbl}">Jabatan *</label><select id="pds_role" class="${inp}"><option value="petugas">Petugas UKS</option><option value="supervisor">Supervisor</option></select><p class="text-[11px] text-gray-400 mt-1">Jabatan berlaku untuk semua siswa yang dicentang.</p></div>
+          <div id="pds_info" class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-900">Centang satu atau banyak siswa. Username dan password mengikuti akun siswa (akun yang sama): username = nama depan, password = tanggal lahir.</div>
+          <div class="flex gap-3 justify-end pt-2"><button type="button" onclick="closeModal()" class="px-5 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium">Batal</button><button type="submit" id="pds_submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"><i class="fa-solid fa-user-plus mr-2"></i> Tambahkan</button></div>
+        </form>
+      </div>
+    </div>`;
+  const box=document.getElementById('pds_list'),cari=document.getElementById('pds_cari'),kls=document.getElementById('pds_kelas'),
+        allCb=document.getElementById('pds_all'),cnt=document.getElementById('pds_count'),info=document.getElementById('pds_info'),sub=document.getElementById('pds_submit');
+  const filtered=()=>{
+    const q=cari.value.trim().toLowerCase(),k=kls.value;
+    return list.filter(x=>(!k||(x.kelas||'')===k)&&(!q||(x.nama||'').toLowerCase().includes(q)||String(x.nis||'').toLowerCase().includes(q)));
+  };
+  const refreshMeta=()=>{
+    const vis=filtered().filter(x=>!sudahPetugas.has(String(x.id)));
+    const nSel=vis.filter(x=>picked.has(String(x.id))).length;
+    allCb.checked=vis.length>0&&nSel===vis.length;
+    allCb.indeterminate=nSel>0&&nSel<vis.length;
+    cnt.textContent=picked.size+' dipilih';
+    sub.innerHTML='<i class="fa-solid fa-user-plus mr-2"></i> Tambahkan'+(picked.size>1?' ('+picked.size+')':'');
+    if(picked.size===1){const sw=list.find(x=>String(x.id)===[...picked][0]);if(sw)info.innerHTML=`Username: <b>${esc(unameOf(sw))}</b> · Password: <b>${esc(tglOf(sw))}</b><br>Akun siswa dan akun petugas adalah akun yang sama. Setelah login, petugas bisa berpindah ke akses Siswa lewat menu di sidebar.`;}
+    else if(picked.size>1)info.innerHTML=`<b>${picked.size} siswa</b> akan ditambahkan. Masing-masing: username = nama depan (jika sudah dipakai, memakai NIS), password = tanggal lahir.<br>Akun siswa dan akun petugas adalah akun yang sama.`;
+    else info.innerHTML='Centang satu atau banyak siswa. Username dan password mengikuti akun siswa (akun yang sama): username = nama depan, password = tanggal lahir.';
+  };
+  const draw=()=>{
+    const f=filtered();
+    box.innerHTML=f.length?f.map(x=>{
+      const dis=sudahPetugas.has(String(x.id));
+      return `<label class="flex items-center gap-3 px-3 py-2.5 ${dis?'bg-gray-50 opacity-60 cursor-not-allowed':'hover:bg-emerald-50 cursor-pointer'} select-none">
+        <input type="checkbox" class="pds_cb w-4 h-4 accent-emerald-600 shrink-0 ${dis?'':'cursor-pointer'}" value="${x.id}" ${dis?'disabled':''} ${picked.has(String(x.id))?'checked':''}/>
+        <span class="flex-1 min-w-0"><span class="block text-sm font-medium text-gray-800 truncate">${esc(x.nama)}</span><span class="block text-xs text-gray-500">${esc(x.nis||'-')} · ${esc(x.kelas||'-')}</span></span>
+        ${dis?'<span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold whitespace-nowrap">Sudah punya akun</span>':''}
+      </label>`;}).join(''):'<p class="text-center text-gray-400 text-sm py-8">Tidak ada siswa yang cocok</p>';
+    refreshMeta();
+  };
+  box.addEventListener('change',e=>{
+    const cb=e.target.closest('.pds_cb');if(!cb)return;
+    if(cb.checked)picked.add(String(cb.value));else picked.delete(String(cb.value));
+    refreshMeta();
+  });
+  allCb.addEventListener('change',()=>{
+    filtered().filter(x=>!sudahPetugas.has(String(x.id))).forEach(x=>{if(allCb.checked)picked.add(String(x.id));else picked.delete(String(x.id));});
+    draw();
+  });
+  cari.addEventListener('input',draw);kls.addEventListener('change',draw);
+  draw();
+  document.getElementById('pdsForm').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const role=document.getElementById('pds_role').value;
+    const terpilih=list.filter(x=>picked.has(String(x.id)));
+    if(!terpilih.length)return toast('Centang minimal satu siswa','error');
+    const batch=[],gagal=[],newNames=[];
+    terpilih.forEach(sw=>{
+      const username=unameOf(sw,newNames),password=tglOf(sw);
+      if(!/^[a-z0-9._-]{3,30}$/.test(username))return gagal.push(sw.nama+' (username tidak valid)');
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(password))return gagal.push(sw.nama+' (tanggal lahir tidak valid)');
+      if(usedNames(newNames).has(username))return gagal.push(sw.nama+' (username sudah dipakai)');
+      newNames.push(username);batch.push({full_name:sw.nama,username,password,role});
+    });
+    if(!batch.length)return toast('Tidak ada yang bisa ditambahkan: '+gagal.slice(0,3).join(', '),'error');
+    if(CLOUD_ON){await Cloud.saveUsersBatch(batch,gagal);return;}
+    batch.forEach(d=>DB.insert('users',{full_name:d.full_name,username:d.username,...pwFields(d.password),must_change:false,role:d.role,is_active:1}));
+    if(batch.length===1&&!gagal.length)toast(ROLE_LABEL[role]+' ditambahkan. Login: '+batch[0].username);
+    else toast(batch.length+' '+ROLE_LABEL[role]+' ditambahkan'+(gagal.length?'. Dilewati '+gagal.length+': '+gagal.slice(0,3).join(', ')+(gagal.length>3?'…':''):''),gagal.length?'info':'success');
+    closeModal();View.render();
+  });
+};
+window.openUserForm = (id=null,preset=null) => {
   if(Session.user().role!=='admin'){toast('Hanya admin','error');return;}
   const u=id?DB.find('users',id):null;
+  const pf=u||preset||{};
   document.getElementById('modalContainer').innerHTML = `
     <div class="fixed inset-0 z-[80] bg-black/50 flex items-center justify-center p-4 overflow-y-auto slide-up">
       <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full my-8">
-        <div class="flex items-center justify-between p-6 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-lg">${id?'Edit User':'Tambah User'}</h3><button onclick="closeModal()" class="p-2 rounded-lg hover:bg-gray-100"><i class="fa-solid fa-xmark text-gray-500"></i></button></div>
+        <div class="flex items-center justify-between p-6 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-lg">${id?'Edit User':(preset?'Tambah Petugas dari Data Siswa':'Tambah User')}</h3><button onclick="closeModal()" class="p-2 rounded-lg hover:bg-gray-100"><i class="fa-solid fa-xmark text-gray-500"></i></button></div>
         <form id="userForm" class="p-6 space-y-4">
-          <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Nama Lengkap *</label><input id="u_nama" required value="${esc(u?.full_name||'')}" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm"/></div>
-          <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Username *</label><input id="u_username" required value="${esc(u?.username||'')}" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm"/></div>
+          <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Nama Lengkap *</label><input id="u_nama" required value="${esc(pf.full_name||'')}" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm"/></div>
+          <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Username *</label><input id="u_username" required value="${esc(pf.username||'')}" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm"/></div>
           <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Password ${id?'<span class="text-gray-400 normal-case font-normal">(kosongkan jika tidak diubah)</span>':'*'}</label><input id="u_password" type="password" ${id?'':'required'} class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm"/></div>
-          <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Role *</label><select id="u_role" required class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm bg-white"><option value="petugas" ${u?.role==='petugas'?'selected':''}>Petugas UKS</option><option value="admin" ${u?.role==='admin'?'selected':''}>Administrator</option></select></div>
+          <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Role *</label><select id="u_role" required class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm bg-white"><option value="petugas" ${pf.role==='petugas'?'selected':''}>Petugas UKS</option><option value="supervisor" ${isSupervisor(pf.role)?'selected':''}>Supervisor</option>${preset?'':`<option value="admin" ${pf.role==='admin'?'selected':''}>Administrator</option>`}</select></div>
           <div class="flex gap-3 justify-end pt-2"><button type="button" onclick="closeModal()" class="px-5 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium">Batal</button><button type="submit" class="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold"><i class="fa-solid fa-floppy-disk mr-2"></i> Simpan</button></div>
         </form>
       </div>
@@ -2886,6 +3072,24 @@ const Cloud={
       await this.reloadUsers();closeModal();View.render();
     }catch(e){toast('Gagal menyimpan user: '+e.message,'error');}
   },
+  // v3.3.2: tambah banyak user sekaligus (satu kali reload & render di akhir)
+  async saveUsersBatch(items,gagal){
+    gagal=gagal||[];let ok=0;
+    for(const d of items){
+      try{
+        const uname=d.username.trim().toLowerCase();
+        if(!/^[a-z0-9._-]{3,30}$/.test(uname)){gagal.push(d.full_name+' (username tidak valid)');continue;}
+        if(!d.password||d.password.length<6){gagal.push(d.full_name+' (password minimal 6 karakter)');continue;}
+        await this.req('POST','/rest/v1/rpc/uks_create_user',{p_username:uname,p_full_name:d.full_name,p_password:d.password,p_role:d.role});
+        ok++;
+      }catch(e){gagal.push(d.full_name+' ('+e.message+')');}
+    }
+    try{await this.reloadUsers();}catch(e){}
+    if(ok)toast(ok+' petugas ditambahkan'+(gagal.length?'. Gagal '+gagal.length+': '+gagal.slice(0,3).join(', ')+(gagal.length>3?'…':''):''),gagal.length?'info':'success');
+    else toast('Gagal menambahkan: '+gagal.slice(0,3).join(', '),'error');
+    if(ok||!gagal.length){closeModal();}
+    View.render();
+  },
   async setUserActive(id,aktif){
     try{await this.req('POST','/rest/v1/rpc/uks_set_user_active',{p_id:id,p_active:aktif});await this.reloadUsers();toast(aktif?'Diaktifkan':'Dinonaktifkan','info');View.render();}
     catch(e){toast('Gagal: '+e.message,'error');}
@@ -2893,6 +3097,15 @@ const Cloud={
   async deleteUser(id){
     try{await this.req('POST','/rest/v1/rpc/uks_delete_user',{p_id:id});await this.reloadUsers();toast('User dihapus');View.render();}
     catch(e){toast('Gagal menghapus: '+e.message,'error');}
+  },
+  async changeOwnPassword(username,lama,baru){
+    const email=username.includes('@')?username:username.toLowerCase()+'@uks.local';
+    const chk=await this.auth('token?grant_type=password',{email,password:lama});
+    if(!chk.ok)throw new Error('Password lama salah');
+    const tk=await this.token();
+    const r=await fetch(SUPABASE_URL+'/auth/v1/user',{method:'PUT',headers:{apikey:SUPABASE_ANON,Authorization:'Bearer '+tk,'Content-Type':'application/json'},body:JSON.stringify({password:baru})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(j.msg||j.message||j.error_description||('Gagal mengubah password (HTTP '+r.status+')'));
   },
   async siswaLogin(u,p){return (await this.req('POST','/rest/v1/rpc/siswa_login',{p_user:u,p_pass:p}))||{ok:false,error:'Respon kosong'};},
   applySiswa(x){
