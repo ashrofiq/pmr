@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.1.0</title>
+<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.1.1</title>
 <meta name="application-name" content="UKS SMANSAQ">
-<meta name="app-version" content="3.1.0">
+<meta name="app-version" content="3.1.1">
 <meta name="description" content="Sistem Informasi UKS SMA Negeri 1 Klirong — rekam medis, screening, kunjungan, permintaan & stok obat.">
 <meta name="theme-color" content="#1e3a5f">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -40,16 +40,17 @@ body{font-family:'Inter',sans-serif}
 
 <script>
 /* ============================================================
-   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.1.0
+   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.1.1
    Single-file Application
    ============================================================ */
 
+// v3.1.1: submenu Screening tidak di sidebar; diakses lewat tombol di halaman Screening.
 // v3.1.0: siswa belum screening tidak masuk Siswa Rawan; submenu Screening (Form, Daftar, Belum Screening);
 //         area siswa: Dashboard, Screening Mandiri, Riwayat Kesehatan.
 // ==================== APP META ====================
 const APP_NAME    = 'UKS SMANSAQ';
 const APP_SUBNAME = 'SMA Negeri 1 Klirong';
-const APP_VERSION = '3.1.0';
+const APP_VERSION = '3.1.1';
 
 // ==================== LOGO (SVG inline, menyerupai logo UKS SMANSAQ) ====================
 const LOGO_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Logo UKS SMANSAQ">'
@@ -484,7 +485,7 @@ function analisaSiswaRawan(){
     if(s.riwayat_penyakit&&s.riwayat_penyakit.trim()){risks.push('riwayat');details.riwayat=s.riwayat_penyakit.trim();}
     const scr=DB.db.screening.filter(x=>x.siswa_id===s.id).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
     const last=scr[0];
-    if(!last)return null;   // v3.1.0: siswa yang belum screening tidak dimasukkan ke siswa rawan
+    if(!last)return null;   // v3.1.1: siswa yang belum screening tidak dimasukkan ke siswa rawan
     if(last){
       if(last.imt){try{const imt=JSON.parse(last.imt);
         if(imt.status==='Kurus'){risks.push('gizi_kurang');details.gizi_kurang=`IMT ${imt.imt}`;}
@@ -509,7 +510,7 @@ function analisaSiswaRawan(){
   }).filter(x=>x&&x.risks.length>0);
 }
 
-// ==================== v3.1.0: HELPER SCREENING ====================
+// ==================== v3.1.1: HELPER SCREENING ====================
 function getSiswaAktif(){const ta=DB.db.tahunAjaranAktif;return DB.db.siswa.filter(s=>!s.tahun_ajaran||s.tahun_ajaran===ta);}
 function getBelumScreening(){const done=new Set(DB.db.screening.map(x=>x.siswa_id));return getSiswaAktif().filter(s=>!done.has(s.id));}
 function parseImtSafe(s){try{return s&&s.imt?JSON.parse(s.imt):null;}catch{return null;}}
@@ -519,7 +520,14 @@ window.toggleNavGroup=id=>{
   if(g)g.classList.toggle('hidden');if(c)c.classList.toggle('rotate-180');
 };
 
-// ==================== v3.1.0: DAFTAR SCREENING ====================
+// Tombol akses sub menu Screening (tersembunyi dari sidebar)
+function screeningTabs(active){
+  const belum=getBelumScreening().length;
+  const t=[['screening','Form Screening','fa-file-pen'],['screening-daftar','Daftar Screening','fa-list-check'],['screening-belum','Siswa Belum Screening','fa-user-clock']];
+  return `<div class="flex flex-wrap gap-2 mb-6 slide-up">${t.map(([id,l,ic])=>`<button onclick="View.go('${id}')" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${active===id?'bg-blue-600 text-white shadow-md shadow-blue-600/30':'bg-white border border-gray-200 text-gray-700 hover:bg-blue-50 hover:text-blue-700'}"><i class="fa-solid ${ic}"></i>${l}${id==='screening-belum'&&belum?`<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${active===id?'bg-white text-blue-700':'bg-amber-500 text-white'}">${belum}</span>`:''}</button>`).join('')}</div>`;
+}
+
+// ==================== v3.1.1: DAFTAR SCREENING ====================
 function renderScreeningDaftar(page){
   const aktifIds=new Set(getSiswaAktif().map(s=>s.id));
   const all=DB.db.screening.filter(x=>aktifIds.has(x.siswa_id)).map(x=>({...x,_s:DB.find('siswa',x.siswa_id),_imt:parseImtSafe(x)})).sort((a,b)=>new Date(b.tanggal)-new Date(a.tanggal));
@@ -532,6 +540,7 @@ function renderScreeningDaftar(page){
         <button onclick="View.go('screening')" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-lg shadow-emerald-600/30"><i class="fa-solid fa-plus"></i> Screening Baru</button>
       </div>
     </div>
+    ${screeningTabs('screening-daftar')}
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6 slide-up">
       <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div class="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5"><i class="fa-solid fa-magnifying-glass text-gray-400"></i><input id="sdSearch" type="text" placeholder="Cari nama / NIS..." class="w-full bg-transparent outline-none text-sm"/></div>
@@ -584,7 +593,7 @@ function renderScreeningDaftar(page){
   draw();
 }
 
-// ==================== v3.1.0: SISWA BELUM SCREENING ====================
+// ==================== v3.1.1: SISWA BELUM SCREENING ====================
 function renderScreeningBelum(page){
   const aktif=getSiswaAktif();
   const belum=getBelumScreening().sort((a,b)=>String(a.kelas||'').localeCompare(String(b.kelas||''),'id')||String(a.nama).localeCompare(String(b.nama),'id'));
@@ -598,6 +607,7 @@ function renderScreeningBelum(page){
         <button onclick="cetakBelumScreening()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-lg shadow-emerald-600/30"><i class="fa-solid fa-print"></i> Cetak</button>
       </div>
     </div>
+    ${screeningTabs('screening-belum')}
     <div class="grid grid-cols-3 gap-4 mb-4 slide-up">
       ${card('Total Siswa',aktif.length,'fa-users','blue')}
       ${card('Sudah Screening',sudah,'fa-circle-check','emerald')}
@@ -638,7 +648,7 @@ function renderScreeningBelum(page){
   draw();
 }
 
-// ==================== v3.1.0: AREA SISWA (Dashboard & Riwayat Kesehatan) ====================
+// ==================== v3.1.1: AREA SISWA (Dashboard & Riwayat Kesehatan) ====================
 const RIWAYAT_META={
   screening:{label:'Screening',color:'emerald',icon:'fa-stethoscope'},
   kunjungan:{label:'Kunjungan UKS',color:'indigo',icon:'fa-clipboard-user'},
@@ -869,11 +879,7 @@ function renderShell(){
   const menu = [
     { id:'dashboard', icon:'fa-gauge-high',  label:'Dashboard',         roles:['admin','petugas','siswa'] },
     { id:'siswa',     icon:'fa-users',       label:'Data Siswa',        roles:['admin','petugas'] },
-    { id:'screening-grp', icon:'fa-stethoscope', label:'Screening',     roles:['admin','petugas'], badge: belumCount, badgeColor:'amber', children:[
-      { id:'screening',        icon:'fa-file-pen',   label:'Form Screening' },
-      { id:'screening-daftar', icon:'fa-list-check', label:'Daftar Screening' },
-      { id:'screening-belum',  icon:'fa-user-clock', label:'Belum Screening' },
-    ]},
+    { id:'screening', icon:'fa-stethoscope', label:'Screening', roles:['admin','petugas'], badge: belumCount, badgeColor:'amber' },
     { id:'screening', icon:'fa-stethoscope', label:'Screening Mandiri', roles:['siswa'] },
     { id:'riwayat',   icon:'fa-clock-rotate-left', label:'Riwayat Kesehatan', roles:['siswa'] },
     { id:'permintaan',icon:'fa-pills',       label:'Permintaan Obat',   roles:['admin','petugas'], badge: permintaanPending, badgeColor:'amber' },
@@ -897,7 +903,7 @@ function renderShell(){
         </div>
       </div>`;
     }
-    const active = View.current===m.id || (m.id==='siswa'&&View.current==='siswa-detail');
+    const active = View.current===m.id || (m.id==='siswa'&&View.current==='siswa-detail') || (m.id==='screening'&&user.role!=='siswa'&&['screening-daftar','screening-belum'].includes(View.current));
     return `<button onclick="View.go('${m.id}')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left ${active?'bg-blue-600 text-white shadow-md shadow-blue-600/30':'text-gray-600 hover:bg-blue-50 hover:text-blue-700'}">
       <i class="fa-solid ${m.icon} w-4 text-center text-sm"></i><span class="font-medium text-sm">${m.label}</span>${badgeOf(m)}</button>`;
   }).join('');
@@ -1356,6 +1362,7 @@ function renderScreening(page){
   const preKelas = preId ? (DB.find('siswa',preId)?.kelas || '') : '';
   page.innerHTML = `
     <div class="mb-6 slide-up"><h2 class="text-3xl font-bold text-gray-800">${isSiswa?'Screening Kesehatan Mandiri':'Form Screening Kesehatan'}</h2><p class="text-gray-500 mt-1">${isSiswa?'Isi data pemeriksaan kesehatanmu secara mandiri':'Input data pemeriksaan berkala siswa'} (TA ${esc(DB.db.tahunAjaranAktif)})</p></div>
+    ${isSiswa?'':screeningTabs('screening')}
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 max-w-4xl slide-up">
       <form id="screeningForm" class="space-y-6">
         ${isSiswa&&meSiswa?siswaSelfBox(meSiswa):kelasSiswaSelectHTML('sc_kelas','sc_siswa',{selectedKelas:preKelas,selectedSiswa:preId})}
@@ -2679,7 +2686,7 @@ window.addEventListener('storage',e=>{
   if(Session.user()&&!document.getElementById('modalContainer').innerHTML.trim())View.render();
 });
 
-// ==================== SUPABASE CLOUD (v3.1.0) ====================
+// ==================== SUPABASE CLOUD (v3.1.1) ====================
 // Anon key aman ditaruh di sini (memang publik) SELAMA RLS aktif. JANGAN pernah taruh service_role key di file ini.
 const SUPABASE_URL='https://sixukvhwlsrjkcuchlmj.supabase.co';
 const SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpeHVrdmh3bHNyamtjdWNobG1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNDE1MzYsImV4cCI6MjEwODcxNzUzNn0.lFiYdshcLm8a7TPe_eSLQO81wY0goKlgXqH3eoIL9eY';
@@ -2842,7 +2849,7 @@ const Cloud={
   applySiswa(x){
     this.role='siswa';const ta=x.ta||x.siswa.tahun_ajaran||'-';
     const scr=(x.screening||[]).map(r=>this.fromRow('screening',r));
-    const fr=(k,a)=>(Array.isArray(a)?a:[]).map(r=>this.fromRow(k,r));   // v3.1.0: riwayat lengkap jika RPC siswa_login mengirimnya
+    const fr=(k,a)=>(Array.isArray(a)?a:[]).map(r=>this.fromRow(k,r));   // v3.1.1: riwayat lengkap jika RPC siswa_login mengirimnya
     DB.db=this.shape({siswa:[this.fromRow('siswa',x.siswa)],screening:scr,rekam:fr('rekam',x.rekam),kunjungan:fr('kunjungan',x.kunjungan),permintaanObat:fr('permintaanObat',x.permintaan_obat),obat:fr('obat',x.obat),tahunAjaran:[ta],tahunAjaranAktif:ta,kelas:[]});
     this.snap={screening:new Map(scr.map(r=>[r.id,'x']))};
   },
