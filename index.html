@@ -388,7 +388,7 @@ function downloadTemplateSiswa(){
   exportExcel([{
     'NIS':'2024001','Nama':'Contoh Nama Siswa','Jenis Kelamin (L/P)':'L',
     'Tanggal Lahir (YYYY-MM-DD)':'2008-05-15','Kelas':'X-1','Golongan Darah (A/B/AB/O)':'O',
-    'No HP':'08123456789','No HP Ayah':'08123456780','No HP Ibu':'08123456781','Alamat':'Jl. Contoh No. 1, Klirong','Alergi':'Seafood','Riwayat Penyakit':'Asma'
+    'No HP':'08123456789','Nama Ayah':'Contoh Nama Ayah','Nama Ibu':'Contoh Nama Ibu','No HP Ayah':'08123456780','No HP Ibu':'08123456781','Alamat':'Jl. Contoh No. 1, Klirong','Alergi':'Seafood','Riwayat Penyakit':'Asma'
   }],'Template','Template_Import_Siswa.xlsx');
 }
 
@@ -758,7 +758,7 @@ function renderSiswa(page){
       </div>
       <div class="overflow-x-auto">
         <table class="w-full">
-          <thead class="bg-gray-50 border-b border-gray-100"><tr class="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"><th class="px-6 py-3">NIS</th><th class="px-6 py-3">Nama</th><th class="px-6 py-3">Kelas</th><th class="px-6 py-3">JK</th><th class="px-6 py-3">Umur</th><th class="px-6 py-3">Gol. Darah</th><th class="px-6 py-3">Alergi</th><th class="px-6 py-3">Riwayat Penyakit</th><th class="px-6 py-3 text-right">Aksi</th></tr></thead>
+          <thead class="bg-gray-50 border-b border-gray-100"><tr class="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"><th class="px-6 py-3">NIS</th><th class="px-6 py-3">Nama</th><th class="px-6 py-3">Kelas</th><th class="px-6 py-3">Nama Ayah</th><th class="px-6 py-3">Nama Ibu</th><th class="px-6 py-3">JK</th><th class="px-6 py-3">Umur</th><th class="px-6 py-3">Gol. Darah</th><th class="px-6 py-3">Alergi</th><th class="px-6 py-3">Riwayat Penyakit</th><th class="px-6 py-3 text-right">Aksi</th></tr></thead>
           <tbody id="siswaTbody" class="divide-y divide-gray-100"></tbody>
         </table>
       </div>
@@ -772,13 +772,15 @@ function renderSiswa(page){
     list.sort((a,b)=>(a.nama||'').localeCompare(b.nama||''));
     const tb=document.getElementById('siswaTbody');
     document.getElementById('siswaCount').textContent=`${list.length} siswa`;
-    if(!list.length){tb.innerHTML=`<tr><td colspan="9" class="text-center py-10 text-gray-400">Belum ada data siswa</td></tr>`;return;}
+    if(!list.length){tb.innerHTML=`<tr><td colspan="11" class="text-center py-10 text-gray-400">Belum ada data siswa</td></tr>`;return;}
     const rawanIds=new Set(analisaSiswaRawan().filter(r=>r.level==='tinggi').map(r=>r.siswa.id));
     tb.innerHTML=list.map(s=>`
       <tr class="hover:bg-gray-50">
         <td class="px-6 py-4 text-sm font-medium text-gray-800">${esc(s.nis)}</td>
         <td class="px-6 py-4"><button onclick="View.go('siswa-detail',{id:${s.id}})" class="font-semibold text-blue-600 hover:underline text-left flex items-center gap-2">${esc(s.nama)}${rawanIds.has(s.id)?'<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500 text-white">RAWAN</span>':''}</button></td>
         <td class="px-6 py-4 text-sm text-gray-600">${esc(s.kelas||'-')}</td>
+        <td class="px-6 py-4 text-sm text-gray-600">${esc(s.nama_ayah||'-')}</td>
+        <td class="px-6 py-4 text-sm text-gray-600">${esc(s.nama_ibu||'-')}</td>
         <td class="px-6 py-4 text-sm text-gray-600">${s.jenis_kelamin==='L'?'L':'P'}</td>
         <td class="px-6 py-4 text-sm text-gray-600">${hitungUmur(s.tanggal_lahir)}</td>
         <td class="px-6 py-4 text-sm text-gray-600">${esc(s.golongan_darah||'-')}</td><td class="px-6 py-4 text-sm text-rose-600">${esc(s.alergi||'-')}</td><td class="px-6 py-4 text-sm text-gray-600">${esc(s.riwayat_penyakit||'-')}</td>
@@ -813,6 +815,8 @@ window.openSiswaForm = (id=null) => {
             <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Golongan Darah</label>
               <select id="s_goldar" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm bg-white"><option value="">-</option>${['A','B','AB','O'].map(g=>`<option value="${g}" ${s?.golongan_darah===g?'selected':''}>${g}</option>`).join('')}</select></div>
             <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">No. HP / WA</label><input id="s_hp" value="${esc(s?.no_hp||'')}" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm"/></div>
+            <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Nama Ayah</label><input id="s_nama_ayah" value="${esc(s?.nama_ayah||'')}" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm"/></div>
+            <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Nama Ibu</label><input id="s_nama_ibu" value="${esc(s?.nama_ibu||'')}" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm"/></div>
             <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">No. Telp Ayah</label><input id="s_telp_ayah" type="tel" value="${esc(s?.telp_ayah||'')}" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm"/></div>
             <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">No. Telp Ibu</label><input id="s_telp_ibu" type="tel" value="${esc(s?.telp_ibu||'')}" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm"/></div>
             <div><label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Tahun Ajaran *</label>
@@ -838,6 +842,8 @@ window.openSiswaForm = (id=null) => {
       kelas:document.getElementById('s_kelas').value,
       golongan_darah:document.getElementById('s_goldar').value,
       no_hp:document.getElementById('s_hp').value.trim(),
+      nama_ayah:document.getElementById('s_nama_ayah').value.trim(),
+      nama_ibu:document.getElementById('s_nama_ibu').value.trim(),
       telp_ayah:document.getElementById('s_telp_ayah').value.trim(),
       telp_ibu:document.getElementById('s_telp_ibu').value.trim(),
       alamat:document.getElementById('s_alamat').value.trim(),
@@ -871,7 +877,7 @@ window.exportSiswa = () => {
     'NIS':s.nis,'Nama':s.nama,'Jenis Kelamin':s.jenis_kelamin==='L'?'Laki-laki':'Perempuan',
     'Tanggal Lahir':s.tanggal_lahir||'','Umur':hitungUmur(s.tanggal_lahir),'Kelas':s.kelas||'',
     'Tahun Ajaran':s.tahun_ajaran||'',
-    'Golongan Darah':s.golongan_darah||'','No HP':s.no_hp||'','No Telp Ayah':s.telp_ayah||'','No Telp Ibu':s.telp_ibu||'','Alamat':s.alamat||'',
+    'Golongan Darah':s.golongan_darah||'','No HP':s.no_hp||'','Nama Ayah':s.nama_ayah||'','Nama Ibu':s.nama_ibu||'','No Telp Ayah':s.telp_ayah||'','No Telp Ibu':s.telp_ibu||'','Alamat':s.alamat||'',
     'Alergi':s.alergi||'','Riwayat Penyakit':s.riwayat_penyakit||''
   }));
   exportExcel(rows,'Data Siswa',`Data_Siswa_UKS_${todayISO()}.xlsx`);
@@ -885,7 +891,7 @@ window.openImportModal = () => {
       <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full my-8">
         <div class="flex items-center justify-between p-6 border-b border-gray-100"><div><h3 class="font-bold text-gray-800 text-lg">Import Data Siswa</h3><p class="text-xs text-gray-500 mt-0.5">Format .xlsx, .xls, atau .csv</p></div><button onclick="closeModal()" class="p-2 rounded-lg hover:bg-gray-100"><i class="fa-solid fa-xmark text-gray-500"></i></button></div>
         <div class="p-6 space-y-5">
-          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4"><div class="flex items-start gap-3"><i class="fa-solid fa-circle-info text-blue-600 mt-0.5"></i><div class="text-sm text-blue-900"><p class="font-semibold mb-1">Kolom yang dibutuhkan:</p><p class="text-xs font-mono bg-white/60 rounded p-2 mt-1">NIS* | Nama* | Jenis Kelamin (L/P)* | Tanggal Lahir | Kelas | Golongan Darah | No HP | Alamat | Alergi | Riwayat Penyakit</p><button onclick="downloadTemplateSiswa()" class="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-blue-700 hover:underline"><i class="fa-solid fa-download"></i> Unduh Template</button></div></div></div>
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4"><div class="flex items-start gap-3"><i class="fa-solid fa-circle-info text-blue-600 mt-0.5"></i><div class="text-sm text-blue-900"><p class="font-semibold mb-1">Kolom yang dibutuhkan:</p><p class="text-xs font-mono bg-white/60 rounded p-2 mt-1">NIS* | Nama* | Jenis Kelamin (L/P)* | Tanggal Lahir | Kelas | Golongan Darah | No HP | Nama Ayah | Nama Ibu | No HP Ayah | No HP Ibu | Alamat | Alergi | Riwayat Penyakit</p><button onclick="downloadTemplateSiswa()" class="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-blue-700 hover:underline"><i class="fa-solid fa-download"></i> Unduh Template</button></div></div></div>
           <div>
             <label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase">Tahun Ajaran Tujuan</label>
             <select id="importTahunAjaran" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-500 text-sm bg-white">
@@ -920,7 +926,7 @@ window.openImportModal = () => {
             nis:String(g('nis','nomorinduk','nomorinduksiswa')||'').trim(),nama:String(g('nama','namasiswa','namalengkap')||'').trim(),jenis_kelamin:jk,
             tanggal_lahir:parseExcelDate(g('tanggallahir','tgllahir','birth')),
             kelas:String(g('kelas')||'').trim(),golongan_darah:String(g('golongandarah','goldar','gol')||'').trim().toUpperCase(),
-            no_hp:String(g('nohp','nohandphone','hp','telepon','notelepon','wa','phone')||'').trim(),telp_ayah:String(g('nohpayah','telpayah','noteleponayah','notelpayah','teleponayah','hpayah','nohandphoneayah','ayah')||'').trim(),telp_ibu:String(g('nohpibu','telpibu','noteleponibu','notelpibu','teleponibu','hpibu','nohandphoneibu','ibu')||'').trim(),alamat:String(g('alamat')||'').trim(),
+            no_hp:String(g('nohp','nohandphone','hp','telepon','notelepon','wa','phone')||'').trim(),nama_ayah:String(g('namaayah','namabapak','ayah','bapak','namaayahkandung')||'').trim(),nama_ibu:String(g('namaibu','ibu','namaibukandung')||'').trim(),telp_ayah:String(g('nohpayah','telpayah','noteleponayah','notelpayah','teleponayah','hpayah','nohandphoneayah')||'').trim(),telp_ibu:String(g('nohpibu','telpibu','noteleponibu','notelpibu','teleponibu','hpibu','nohandphoneibu')||'').trim(),alamat:String(g('alamat')||'').trim(),
             alergi:String(g('alergi')||'').trim(),riwayat_penyakit:String(g('riwayatpenyakit','riwayat','penyakit')||'').trim(),
             _valid:true,_err:[]
           };
@@ -954,7 +960,7 @@ window.openImportModal = () => {
       const body={
         nis:r.nis,nama:r.nama,jenis_kelamin:r.jenis_kelamin,
         tanggal_lahir:r.tanggal_lahir,kelas:r.kelas,
-        golongan_darah:r.golongan_darah,no_hp:r.no_hp,telp_ayah:r.telp_ayah,telp_ibu:r.telp_ibu,alamat:r.alamat,
+        golongan_darah:r.golongan_darah,no_hp:r.no_hp,nama_ayah:r.nama_ayah,nama_ibu:r.nama_ibu,telp_ayah:r.telp_ayah,telp_ibu:r.telp_ibu,alamat:r.alamat,
         alergi:r.alergi,riwayat_penyakit:r.riwayat_penyakit,
         tahun_ajaran:taTujuan
       };
@@ -989,6 +995,8 @@ function renderSiswaDetail(page,id){
             <div class="flex gap-2"><span class="text-gray-500 w-32">Tanggal Lahir</span><span class="font-medium">: ${fmtDate(siswa.tanggal_lahir)} (${hitungUmur(siswa.tanggal_lahir)})</span></div>
             <div class="flex gap-2"><span class="text-gray-500 w-32">Gol. Darah</span><span class="font-medium">: ${esc(siswa.golongan_darah||'-')}</span></div>
             <div class="flex gap-2"><span class="text-gray-500 w-32">No. HP</span><span class="font-medium">: ${esc(siswa.no_hp||'-')}</span></div>
+            <div class="flex gap-2"><span class="text-gray-500 w-32">Nama Ayah</span><span class="font-medium">: ${esc(siswa.nama_ayah||'-')}</span></div>
+            <div class="flex gap-2"><span class="text-gray-500 w-32">Nama Ibu</span><span class="font-medium">: ${esc(siswa.nama_ibu||'-')}</span></div>
             <div class="flex gap-2"><span class="text-gray-500 w-32">Telp Ayah</span><span class="font-medium">: ${esc(siswa.telp_ayah||'-')}</span></div>
             <div class="flex gap-2"><span class="text-gray-500 w-32">Telp Ibu</span><span class="font-medium">: ${esc(siswa.telp_ibu||'-')}</span></div>
             <div class="flex gap-2 sm:col-span-2"><span class="text-gray-500 w-32">Alamat</span><span class="font-medium">: ${esc(siswa.alamat||'-')}</span></div>
@@ -1684,9 +1692,9 @@ function getLaporanData(){
   const filterKelas=s=>!kelas||s.kelas===kelas;
   if(jenis==='siswa'){
     const data=DB.db.siswa.filter(filterKelas);
-    return {jenis,kelas,dari,sampai,headers:['NIS','Nama','JK','Umur','Kelas','TA','Gol','No HP','Alamat','Alergi','Riwayat'],
-      rows:data.map(s=>[s.nis,s.nama,s.jenis_kelamin==='L'?'L':'P',hitungUmur(s.tanggal_lahir),s.kelas||'-',s.tahun_ajaran||'-',s.golongan_darah||'-',s.no_hp||'-',s.alamat||'-',s.alergi||'-',s.riwayat_penyakit||'-']),
-      exportRows:data.map(s=>({'NIS':s.nis,'Nama':s.nama,'JK':s.jenis_kelamin==='L'?'Laki-laki':'Perempuan','Tgl Lahir':s.tanggal_lahir||'','Umur':hitungUmur(s.tanggal_lahir),'Kelas':s.kelas||'','Tahun Ajaran':s.tahun_ajaran||'','Gol Darah':s.golongan_darah||'','No HP':s.no_hp||'','Alamat':s.alamat||'','Alergi':s.alergi||'','Riwayat':s.riwayat_penyakit||''})),
+    return {jenis,kelas,dari,sampai,headers:['NIS','Nama','JK','Umur','Kelas','TA','Gol','No HP','Nama Ayah','Nama Ibu','Alamat','Alergi','Riwayat'],
+      rows:data.map(s=>[s.nis,s.nama,s.jenis_kelamin==='L'?'L':'P',hitungUmur(s.tanggal_lahir),s.kelas||'-',s.tahun_ajaran||'-',s.golongan_darah||'-',s.no_hp||'-',s.nama_ayah||'-',s.nama_ibu||'-',s.alamat||'-',s.alergi||'-',s.riwayat_penyakit||'-']),
+      exportRows:data.map(s=>({'NIS':s.nis,'Nama':s.nama,'JK':s.jenis_kelamin==='L'?'Laki-laki':'Perempuan','Tgl Lahir':s.tanggal_lahir||'','Umur':hitungUmur(s.tanggal_lahir),'Kelas':s.kelas||'','Tahun Ajaran':s.tahun_ajaran||'','Gol Darah':s.golongan_darah||'','No HP':s.no_hp||'','Nama Ayah':s.nama_ayah||'','Nama Ibu':s.nama_ibu||'','Alamat':s.alamat||'','Alergi':s.alergi||'','Riwayat':s.riwayat_penyakit||''})),
       title:'Data Siswa UKS'};
   }
   if(jenis==='kunjungan'){
@@ -1864,7 +1872,7 @@ window.prosesTahunAjaranBaru = async () => {
     DB.insert('siswa', {
       nis:s.nis, nama:s.nama, jenis_kelamin:s.jenis_kelamin,
       tanggal_lahir:s.tanggal_lahir, kelas:newKelas,
-      golongan_darah:s.golongan_darah, no_hp:s.no_hp, telp_ayah:s.telp_ayah, telp_ibu:s.telp_ibu, alamat:s.alamat,
+      golongan_darah:s.golongan_darah, no_hp:s.no_hp, nama_ayah:s.nama_ayah, nama_ibu:s.nama_ibu, telp_ayah:s.telp_ayah, telp_ibu:s.telp_ibu, alamat:s.alamat,
       alergi:s.alergi, riwayat_penyakit:s.riwayat_penyakit,
       tahun_ajaran:keTA
     });
@@ -2412,7 +2420,7 @@ const Cloud={
   SET_KEYS:['kelas','tahunAjaran','tahunAjaranAktif','pembagianKelas'],
   // Kolom tabel biasa (s=teks, n=desimal, i=bilangan bulat, d=tanggal, t=timestamp). 'id' selalu ada.
   COLS:{
-    siswa:{nis:'s',nama:'s',jenis_kelamin:'s',tanggal_lahir:'d',kelas:'s',golongan_darah:'s',no_hp:'s',telp_ayah:'s',telp_ibu:'s',alamat:'s',alergi:'s',riwayat_penyakit:'s',tahun_ajaran:'s',created_at:'t'},
+    siswa:{nis:'s',nama:'s',jenis_kelamin:'s',tanggal_lahir:'d',kelas:'s',golongan_darah:'s',no_hp:'s',nama_ayah:'s',nama_ibu:'s',telp_ayah:'s',telp_ibu:'s',alamat:'s',alergi:'s',riwayat_penyakit:'s',tahun_ajaran:'s',created_at:'t'},
     rekam:{siswa_id:'i',kunjungan_id:'i',tanggal:'t',keluhan:'s',diagnosis:'s',tindakan:'s',obat:'s',catatan:'s',petugas_id:'s',petugas_nama:'s',created_at:'t'},
     screening:{siswa_id:'i',tanggal:'d',tinggi_badan:'n',berat_badan:'n',imt:'s',tekanan_darah:'s',suhu:'n',nadi:'i',respirasi:'i',gula_darah:'i',mata:'s',telinga:'s',gigi_mulut:'s',kulit:'s',catatan:'s',petugas_id:'s',petugas_nama:'s',created_at:'t'},
     kunjungan:{siswa_id:'i',tanggal:'t',prioritas:'s',keluhan:'s',gejala:'s',tindakan:'s',catatan:'s',status:'s',petugas_id:'s',petugas_nama:'s',created_at:'t'},
