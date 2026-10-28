@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.2.6</title>
+<title>UKS SMANSAQ · SMA Negeri 1 Klirong · v3.2.7</title>
 <meta name="application-name" content="UKS SMANSAQ">
-<meta name="app-version" content="3.2.6">
+<meta name="app-version" content="3.2.7">
 <meta name="description" content="Sistem Informasi UKS SMA Negeri 1 Klirong — rekam medis, screening, kunjungan, permintaan & stok obat.">
 <meta name="theme-color" content="#1e3a5f">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -40,10 +40,11 @@ body{font-family:'Inter',sans-serif}
 
 <script>
 /* ============================================================
-   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.2.6
+   UKS SMANSAQ · SMA NEGERI 1 KLIRONG · v3.2.7
    Single-file Application
    ============================================================ */
 
+// v3.2.7: tombol/submenu "Siswa Belum Screening" dihapus dari menu Screening.
 // v3.2.6: tombol Keluar dipindah ke kanan atas; Daftar Screening dikategorikan Mandiri / Oleh Petugas (kolom, filter, export);
 //         submenu baru: Belum Screening Mandiri & Belum Screening oleh Petugas.
 // v3.2.5: halaman detail siswa untuk petugas: baris No. HP, Nama Ayah, No. HP Ayah, Nama Ibu, No. HP Ibu dihapus.
@@ -59,7 +60,7 @@ body{font-family:'Inter',sans-serif}
 // ==================== APP META ====================
 const APP_NAME    = 'UKS SMANSAQ';
 const APP_SUBNAME = 'SMA Negeri 1 Klirong';
-const APP_VERSION = '3.2.6';
+const APP_VERSION = '3.2.7';
 
 // ==================== LOGO (SVG inline, menyerupai logo UKS SMANSAQ) ====================
 const LOGO_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Logo UKS SMANSAQ">'
@@ -559,7 +560,7 @@ window.toggleNavGroup=id=>{
 // Tombol akses sub menu Screening (tersembunyi dari sidebar)
 function screeningTabs(active){
   const cnt={'screening-belum':getBelumScreeningBy('all').length,'screening-belum-mandiri':getBelumScreeningBy('mandiri').length,'screening-belum-petugas':getBelumScreeningBy('petugas').length};
-  const t=[['screening','Form Screening','fa-file-pen'],['screening-daftar','Daftar Screening','fa-list-check'],['screening-belum','Siswa Belum Screening','fa-user-clock'],['screening-belum-mandiri','Belum Screening Mandiri','fa-user'],['screening-belum-petugas','Belum Screening oleh Petugas','fa-user-nurse']];
+  const t=[['screening','Form Screening','fa-file-pen'],['screening-daftar','Daftar Screening','fa-list-check'],['screening-belum-mandiri','Belum Screening Mandiri','fa-user'],['screening-belum-petugas','Belum Screening oleh Petugas','fa-user-nurse']];
   return `<div class="flex flex-wrap gap-2 mb-6 slide-up">${t.map(([id,l,ic])=>`<button onclick="View.go('${id}')" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${active===id?'bg-blue-600 text-white shadow-md shadow-blue-600/30':'bg-white border border-gray-200 text-gray-700 hover:bg-blue-50 hover:text-blue-700'}"><i class="fa-solid ${ic}"></i>${l}${cnt[id]?`<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${active===id?'bg-white text-blue-700':'bg-amber-500 text-white'}">${cnt[id]}</span>`:''}</button>`).join('')}</div>`;
 }
 
